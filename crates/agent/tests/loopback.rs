@@ -168,7 +168,12 @@ async fn link_reconnects_after_the_agent_dies() {
             if fail.load(std::sync::atomic::Ordering::SeqCst) {
                 return Err("host unreachable".to_string());
             }
-            let child = agent().spawn().unwrap();
+            // same isolation as above: no global git config, and an identity so the commit reaches its hook (CI has none)
+            let mut cmd = agent();
+            for (k, v) in [("GIT_CONFIG_GLOBAL", "/dev/null"), ("GIT_CONFIG_SYSTEM", "/dev/null"), ("GIT_AUTHOR_NAME", "T"), ("GIT_AUTHOR_EMAIL", "t@x"), ("GIT_COMMITTER_NAME", "T"), ("GIT_COMMITTER_EMAIL", "t@x")] {
+                cmd.env(k, v);
+            }
+            let child = cmd.spawn().unwrap();
             *pid.lock().unwrap() = child.id();
             Ok(Runner::Remote(Box::new(Remote::from_child(child).await?)))
         })
