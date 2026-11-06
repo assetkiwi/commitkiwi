@@ -42,6 +42,12 @@ jobs:
           pnpm test
           pnpm build
 
+      # The Tauri crate's build script wants the bundled Linux agents; tests do not run them, so empty files do.
+      - name: Placeholder agents
+        run: |
+          mkdir -p agents/linux-aarch64 agents/linux-x86_64
+          touch agents/linux-aarch64/commitkiwi-agent agents/linux-x86_64/commitkiwi-agent
+
       - name: Rust tests
         run: cargo test --workspace
 
