@@ -1,0 +1,75 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  agents:
+    name: Linux agents
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3 (aarch64 builds run under emulation)
+      - name: Build static agents (musl, Docker)
+        run: scripts/build-agents.sh aarch64 x86_64
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: agents
+          path: agents/
+          if-no-files-found: error
+
+  macos:
+    name: macOS arm64 app
+    needs: agents
+    runs-on: macos-14
+    permissions:
+      contents: write # create the draft release
+      id-token: write # build provenance (actions/attest-build-provenance wraps actions/attest)
+      attestations: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: agents
+          path: agents/
+      - name: Agent permissions (artifacts drop the executable bit)
+        run: chmod +x agents/linux-*/commitkiwi-agent
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+      - run: brew install cmake
+      - run: cargo fetch --locked # scripts/gen-third-party.py reads every platform's crate sources offline
+      - run: pnpm install --frozen-lockfile
+        working-directory: app
+
+      - name: Build, bundle licences, verify the signature
+        run: scripts/package-macos.sh
+
+      - name: Collect release files and checksums
+        run: |
+          mkdir release
+          cp target/release/bundle/dmg/*.dmg release/
+          scripts/release-checksums.sh release
+
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: release/*.dmg
+
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/* --draft --verify-tag \
+            --repo "${{ github.repository }}" --title "commit.kiwi ${GITHUB_REF_NAME#v}" \
+            --notes "Draft: add the release notes (see docs/RELEASING.md)."

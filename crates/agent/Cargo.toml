@@ -1,0 +1,19 @@
+[package]
+name = "commitkiwi-agent"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+commitkiwi-core = { version = "0.1.0", path = "../core" }
+commitkiwi-protocol = { version = "0.1.0", path = "../protocol" }
+
+[[bin]]
+name = "commitkiwi-agent"
+path = "src/main.rs"
+
+[dev-dependencies]
+commitkiwi-runner = { path = "../runner" }
+tempfile = "3.27.0"
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros"] }

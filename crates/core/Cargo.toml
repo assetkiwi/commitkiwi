@@ -1,0 +1,15 @@
+[package]
+name = "commitkiwi-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+base64 = "0.23.1"
+commitkiwi-protocol = { version = "0.1.0", path = "../protocol" }
+libc = "0.2"
+notify = { version = "8.2", default-features = false, features = ["macos_fsevent"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"

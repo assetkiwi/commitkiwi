@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" rx="230" fill="#1b2a12"/>
+  <!-- leaf-shaped body -->
+  <path id="body" d="M150 800 C60 580 120 290 380 190 C560 125 720 190 760 330 L745 520 C720 700 540 830 340 805 C270 800 210 802 150 800 Z" fill="#3d6a2c"/>
+  <!-- back highlight band -->
+  <path d="M270 262 C430 160 640 170 735 295" fill="none" stroke="#a3c45f" stroke-width="44" stroke-linecap="butt"/>
+  <path d="M282 300 C430 205 620 212 715 320" fill="none" stroke="#1b2a12" stroke-width="10"/>
+  <!-- head and neck, one shape -->
+  <path d="M548 470 C515 390 540 250 650 218 C745 192 805 268 790 350 L775 400 C750 495 700 560 610 585 C560 596 520 560 548 470 Z" fill="#fff" stroke="#1b2a12" stroke-width="12"/>
+  <!-- beak -->
+  <path d="M778 352 C890 360 968 495 996 700 C930 565 850 478 772 428 Z" fill="#e3cf9b" stroke="#1b2a12" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M706 408 q22 22 58 14" fill="none" stroke="#1b2a12" stroke-width="9" stroke-linecap="round"/>
+  <circle cx="702" cy="338" r="25" fill="#1b2a12"/><circle cx="710" cy="329" r="7" fill="#fff"/>
+  <!-- commit graph: a side branch merges into the trunk, outlined like the logo -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <g stroke="#1b2a12" stroke-width="46">
+      <path d="M290 340 V760"/><path d="M455 430 V500 Q455 560 290 620"/>
+    </g>
+    <path d="M290 340 V760" stroke="#a3c45f" stroke-width="26"/>
+    <path d="M455 430 V500 Q455 560 290 620" stroke="#e3cf9b" stroke-width="26"/>
+  </g>
+  <g stroke="#1b2a12" stroke-width="12">
+    <circle cx="290" cy="340" r="36" fill="#e3cf9b"/>
+    <circle cx="455" cy="430" r="36" fill="#e3cf9b"/>
+    <circle cx="290" cy="620" r="40" fill="#fff"/>
+    <circle cx="290" cy="760" r="36" fill="#e3cf9b"/>
+  </g>
+  <rect x="338" y="316" width="104" height="44" rx="22" fill="#a3c45f" stroke="#1b2a12" stroke-width="10"/>
+  <!-- legs -->
+  <g stroke="#e3cf9b" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M420 835 V945 M360 960 Q390 945 430 950 Q470 955 485 962"/>
+    <path d="M545 818 V935 M488 955 Q520 940 560 944 Q598 948 612 955"/>
+  </g>
+</svg>

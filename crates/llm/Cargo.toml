@@ -1,0 +1,18 @@
+[package]
+name = "commitkiwi-llm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+sha2 = "0.11.1"
+tokio = { version = "1.54.1", features = ["fs", "io-util", "rt", "macros", "net"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "stream"] }
+futures-util = "0.3"
+llama-cpp-2 = { version = "0.1.161", features = ["metal"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"
+llama-cpp-sys-2 = "0.1.161"

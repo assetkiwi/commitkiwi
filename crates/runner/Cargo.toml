@@ -1,0 +1,15 @@
+[package]
+name = "commitkiwi-runner"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+commitkiwi-core = { version = "0.1.0", path = "../core" }
+commitkiwi-protocol = { version = "0.1.0", path = "../protocol" }
+sha2 = "0.11.1"
+tokio = { version = "1.54.1", features = ["rt", "process", "io-util", "sync", "time", "fs", "macros"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"
