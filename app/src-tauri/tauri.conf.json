@@ -36,6 +36,6 @@
       "../../LICENSE-MIT": "LICENSE-MIT",
       "../../LICENSE-APACHE": "LICENSE-APACHE"
     },
-    "macOS": { "signingIdentity": "-" }
+    "macOS": { "signingIdentity": "-", "minimumSystemVersion": "13.0" }
   }
 }
