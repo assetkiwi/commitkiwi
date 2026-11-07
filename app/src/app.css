@@ -428,7 +428,7 @@ span.fh { cursor: default; } span.fh:hover { background: none; }
 .commitbox .msged .cm-scroller { font: 12.5px/1.5 var(--font-mono); min-height: 70px; }
 .commitbox .msged .cm-content { padding: 6px 34px 6px 8px; caret-color: var(--text); } .commitbox .msged .cm-line { padding: 0; }
 .commitbox .msged .cm-placeholder { color: var(--muted); }
-.commitbox .msgrow .sugg { position: absolute; top: 7px; left: 9px; right: 36px; max-height: calc(40vh - 14px); overflow: hidden; pointer-events: none; color: var(--muted); white-space: pre-wrap; font: 12.5px/1.5 var(--font-mono); }
+.commitbox .msgrow .sugg { position: absolute; top: 7px; bottom: 7px; left: 9px; right: 36px; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent); pointer-events: none; color: var(--muted); white-space: pre-wrap; font: 12.5px/1.5 var(--font-mono); }
 .commitbox .msgrow .sugg .kbd { font-size: 10px; padding: 0 5px; margin-left: 6px; border: 1px solid var(--border); border-radius: 3px; vertical-align: 1px; }
 .commitbox .hist { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; } .commitbox .hist .i { width: 12px; height: 12px; }
 .commitbox .ft { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: var(--muted); font-size: 12px; }

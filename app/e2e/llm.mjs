@@ -63,6 +63,10 @@ assert.deepEqual(asked.files.map((f) => [f.path, f.status]), [["README.md", "M"]
 assert.equal(asked.branch, "feature/d11-upgrade-C");
 assert.ok(asked.recent.length > 0 && asked.recent.every((s) => typeof s === "string"));
 assert.equal((await msg()).trim(), "", "a suggestion is not text yet");
+// a long suggestion is clipped to the box, it does not spill over the footer
+const inside = () => page.evaluate(() => { const a = document.querySelector(".commitbox .sugg").getBoundingClientRect(), b = document.querySelector(".commitbox .cm-editor").getBoundingClientRect(); return a.bottom <= b.bottom + 0.5 && a.top >= b.top; });
+await page.evaluate(() => { document.querySelector(".commitbox .sugg").textContent = Array.from({ length: 14 }, (_, i) => `- line ${i}`).join("\n"); });
+assert.ok(await inside(), "a long suggestion stays inside the message box");
 if (process.env.SHOTS_DIR) await page.locator(".commitbox").screenshot({ path: `${process.env.SHOTS_DIR}/llm-suggestion.png` });
 
 // ---- Tab takes it; the box now holds the message and the commit button works with it
