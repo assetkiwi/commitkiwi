@@ -1,6 +1,7 @@
 // One registry for everything a key, menu or the palette can trigger. Command names are the compatible ones
 // (`new_tab`, `navigate_back`, ...), so keymap, command and menu files written for Sublime Merge work unchanged.
 import { app } from "./state.svelte";
+import { noteCommand, setRerun } from "./ui.svelte";
 
 export interface CommandDef {
   run: (args: Record<string, unknown>) => void | Promise<void>;
@@ -37,11 +38,14 @@ export function runCommand(name: string, args: Record<string, unknown> = {}): bo
   const cmd = registry.get(name);
   if (!cmd) return false;
   if (cmd.disabled) { app.notice = cmd.disabled; return true; }
+  noteCommand(name);
   Promise.resolve()
     .then(() => cmd.run(args))
     .catch((e) => { app.notice = String(e); });
   return true;
 }
+
+setRerun((name) => { runCommand(name); });
 
 /** Every registered command (the key bindings editor lists them all). */
 export const registeredCommands = (): { name: string; caption?: string }[] => [...registry].map(([name, d]) => ({ name, caption: d.caption }));

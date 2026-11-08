@@ -17,6 +17,9 @@ export interface OverlayStep {
   preview?: (item: OverlayItem | undefined) => void;
   /** return the next step to continue, nothing to finish */
   pick: (item: OverlayItem) => void | OverlayStep | Promise<void | OverlayStep>;
+  /** pill `index` was removed: the step to show instead. Default: the step where that pill was answered, else the
+   *  command's own first step; set it when later answers should survive or a pill was filled in by default */
+  unpill?: (index: number) => OverlayStep | null | void;
 }
 
 export const ui = $state({
@@ -60,7 +63,17 @@ export function showMenu(at: HTMLElement | MouseEvent, items: (MenuItem | "-")[]
   ui.menu = { x: r.left, y: r.bottom + 4, items };
 }
 
+// The steps that led to the shown one (removing a pill goes back to where it was answered), and the command that
+// opened the prompt (its first step, when the answer came from arguments or a default). Not reactive: only read on removal.
+let trail: OverlayStep[] = [];
+let opener: string | null = null;
+let lastCommand: string | null = null;
+/** commands.ts calls this for every command run, so the prompt it opens knows its command */
+export const noteCommand = (name: string): void => { lastCommand = name; };
+
 export function showOverlay(step: OverlayStep): void {
+  trail = [];
+  opener = lastCommand;
   ui.addRepos = false;
   ui.overlay = step;
   ui.modes.overlay_visible = true;
@@ -82,6 +95,27 @@ export async function pickOverlay(item: OverlayItem): Promise<void> {
   const step = ui.overlay;
   if (!step) return;
   const next = await step.pick(item);
-  if (next) ui.overlay = next;
+  if (next) { if (ui.overlay === step) trail.push(step); ui.overlay = next; }
   else if (ui.overlay === step) hideOverlay();
 }
+
+/** Remove pill `i` from the prompt: the first pill (the command) goes back to the command palette; a later one to the
+ *  step that answered it, so only the options that still fit what is left are offered. */
+export function removePill(i: number): void {
+  const step = ui.overlay;
+  if (!step || i < 0 || i >= (step.pills?.length ?? 0)) return;
+  if (i > 0) {
+    const own = step.unpill?.(i);
+    if (own) { ui.overlay = own; return; }
+    let k = trail.length - 1;
+    while (k >= 0 && (trail[k].pills?.length ?? 0) !== i) k--;
+    if (k >= 0) { ui.overlay = trail[k]; trail = trail.slice(0, k); return; }
+  }
+  // the command pill, or an answer that came from arguments: the command again without them (it asks), else the palette
+  const name = i > 0 && opener && opener !== "show_command_palette" ? opener : "show_command_palette";
+  hideOverlay();
+  rerun(name);
+}
+let rerun: (name: string) => void = () => {};
+/** commands.ts registers how to run a command by name (this module stays free of imports) */
+export const setRerun = (fn: (name: string) => void): void => { rerun = fn; };

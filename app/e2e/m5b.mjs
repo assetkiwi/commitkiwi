@@ -120,6 +120,27 @@ await page.locator(".overlay").waitFor();
 assert.deepEqual(await pills(), ["Push", "feature/d11-upgrade-C", "origin"]);
 assert.equal(await placeholder(), "Push Options");
 if (shots) await page.screenshot({ path: `${shots}/m5b-push.png` });
+// Backspace in the empty field takes the last pill back: the remote (picked from the upstream) is asked for,
+// then the branch (every branch offered), then the command itself (the palette)
+const back = () => page.keyboard.press("Backspace");
+await back();
+assert.deepEqual(await pills(), ["Push", "feature/d11-upgrade-C"]);
+assert.equal(await placeholder(), "Remote");
+assert.deepEqual(await page.locator(".overlay li .l").allInnerTexts(), ["origin"]);
+await page.keyboard.press("Enter");
+assert.deepEqual(await pills(), ["Push", "feature/d11-upgrade-C", "origin"]);
+await back(); await back();
+assert.deepEqual(await pills(), ["Push"]);
+assert.equal(await placeholder(), "Branch to push");
+await page.locator(".overlay input").fill("x");
+await back(); // a typed letter is deleted first, the pill stays
+assert.deepEqual(await pills(), ["Push"]);
+await back();
+assert.deepEqual(await pills(), []);
+assert.equal(await placeholder(), "Type a command");
+await page.keyboard.press("Escape");
+await closed();
+await page.getByRole("button", { name: "Push options" }).click();
 await choose("push --force");
 assert.deepEqual(await pills(), ["Push", "feature/d11-upgrade-C", "origin", "--force"]);
 await choose("Cancel");
@@ -136,6 +157,10 @@ await palette("Remote: Add…");
 assert.deepEqual(await pills(), ["Add Remote"]);
 await type("-bad");
 await page.locator(".overlay .ov-err", { hasText: "cannot start with '-'" }).waitFor();
+await type("upstream");
+assert.deepEqual(await pills(), ["Add Remote", "upstream"]);
+await page.keyboard.press("Backspace"); // back to the name, the step that answered it
+assert.deepEqual(await pills(), ["Add Remote"]);
 await type("upstream");
 assert.deepEqual(await pills(), ["Add Remote", "upstream"]);
 await type("--upload-pack=touch /tmp/x");

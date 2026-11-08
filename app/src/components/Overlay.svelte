@@ -1,6 +1,6 @@
 <script lang="ts">
   import { rank, segments } from "../lib/fuzzy";
-  import { hideOverlay, pickOverlay, ui } from "../lib/ui.svelte";
+  import { hideOverlay, pickOverlay, removePill, ui } from "../lib/ui.svelte";
 
   const MAX = 200; // rows rendered; the rest is reachable by typing
   let query = $state("");
@@ -30,6 +30,10 @@
       e.preventDefault();
       if (step?.text) void pickOverlay({ label: query });
       else if (results[index]) void pickOverlay(results[index].item);
+    } else if (e.key === "Backspace" && query === "" && step?.pills?.length && !e.repeat) {
+      // an empty field: Backspace takes the last answer back, like editing the command line
+      e.preventDefault();
+      removePill(step.pills.length - 1);
     }
     // Escape is a normal key binding (hide_overlay), so a user can rebind it
   }

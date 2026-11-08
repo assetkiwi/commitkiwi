@@ -279,6 +279,7 @@
   function stashPrompt(flags: string[]): OverlayStep {
     return {
       placeholder: "Choose flags", pills: ["Stash", ...flags],
+      unpill: (i) => stashPrompt(flags.filter((_, k) => k !== i - 1)),
       items: [{ label: "stash", detail: "Select to run command", value: null },
         ...STASH_FLAGS.filter(([f]) => !flags.includes(f)).map(([f, d]) => ({ label: f, detail: d, value: f }))],
       pick: (item) => {
@@ -298,8 +299,11 @@
    *  upstream (steps only for what is unknown); --force asks again */
   function pushPrompt(a: Record<string, unknown>) {
     const local = refsOf("branch");
+    // removing a pill asks again: the branch (with every branch offered), or the remote (even when an upstream picked it)
+    const back = (b: string) => (i: number) => (i === 1 ? branchStep() : i === 2 ? remoteList(b) : null);
     const optionsStep = (b: string, remote: string): OverlayStep => ({
       placeholder: "Push Options", pills: ["Push", b, remote], items: PUSH_OPTIONS.map((o) => ({ label: o.label, detail: o.detail, value: o })),
+      unpill: back(b),
       pick: (item) => {
         const o = item.value as (typeof PUSH_OPTIONS)[number];
         const cmd = ["git push", ...o.flags, remote, b].join(" ");
@@ -308,15 +312,18 @@
         return yesNo(["Push", b, remote, ...o.flags], "Force push?", "Force push", `Replaces ${b} on ${remote} with your local branch: commits only on the remote are lost`, run);
       },
     });
+    const remoteList = (b: string): OverlayStep | null => {
+      if (!tab.refs.remotes.length) { notice = "This repository has no remotes."; return null; }
+      const step = listStep(["Push", b], "Remote", tab.refs.remotes.map((r) => ({ label: r, value: r })), (v) => optionsStep(b, v as string), Math.max(0, tab.refs.remotes.indexOf("origin")));
+      return step && { ...step, unpill: back(b) };
+    };
     const remoteStep = (b: string): OverlayStep | null => {
       const t = pushTarget(b, local.find((r) => r.name === b)?.upstream, tab.refs.remotes);
-      if (t.remote) return optionsStep(b, t.remote);
-      if (!tab.refs.remotes.length) { notice = "This repository has no remotes."; return null; }
-      return listStep(["Push", b], "Remote", tab.refs.remotes.map((r) => ({ label: r, value: r })), (v) => optionsStep(b, v as string), Math.max(0, tab.refs.remotes.indexOf("origin")));
+      return t.remote ? optionsStep(b, t.remote) : remoteList(b);
     };
+    const branchStep = () => listStep(["Push"], "Branch to push", local.map(refItem), (_, label) => remoteStep(label) ?? undefined);
     const branch = typeof a.branch === "string" ? a.branch : tab.info.branch;
-    if (branch) { show(remoteStep(branch)); return; }
-    show(listStep(["Push"], "Branch to push", local.map(refItem), (_, label) => remoteStep(label) ?? undefined));
+    show(branch ? remoteStep(branch) : branchStep());
   }
 
   // ---- remotes: add, rename, delete, update URL (commands add_remote / rename_remote / delete_remote / update_remote_url)
@@ -491,6 +498,7 @@
   function mergeFlags(rev: string, label: string, flags: string[]): OverlayStep {
     return {
       placeholder: "Choose flags", pills: ["Merge", label, ...flags],
+      unpill: (i) => (i >= 2 ? mergeFlags(rev, label, flags.filter((_, k) => k !== i - 2)) : null),
       items: [{ label: "merge", detail: "Select to run command", value: null },
         ...remainingFlags(MERGE_FLAGS, flags).map((f) => ({ label: f.flag, detail: f.detail, value: f.flag }))],
       pick: (item) => item.value === null
