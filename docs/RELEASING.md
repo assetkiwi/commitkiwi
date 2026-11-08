@@ -1,8 +1,8 @@
 # Releasing
 
-Releases are macOS arm64 `.dmg` files (ad-hoc signed, not notarized) plus checksums and a build provenance
-attestation, published as a GitHub Release. Linux is "build from source" for now; the Linux agents ship inside the
-macOS app.
+Releases are a macOS arm64 `.dmg` (ad-hoc signed, not notarized) and Linux AppImage, `.deb` and `.rpm` packages for
+x86_64 and arm64 (experimental), plus checksums and a build provenance attestation, published as a GitHub Release. The
+static Linux agents for remote repositories ship inside every package.
 
 `OWNER/REPO` below stands for this repository's GitHub path.
 
@@ -20,8 +20,10 @@ macOS app.
    `cd app && pnpm check && pnpm test`, the e2e files against `pnpm dev`, and `scripts/publish-gate.sh`.
 5. **Tag.** A signed, annotated tag: `git tag -s v0.1.0 -m "commit.kiwi 0.1.0"`, then `git push origin v0.1.0`.
 6. **Build.** Pushing the tag runs `release.yml`: an Ubuntu job builds the Linux agents (`scripts/build-agents.sh`),
-   a macOS arm64 job builds the app with them, writes `SHA256SUMS`, attests the build and creates a **draft**
-   release. To build by hand instead: `scripts/package-macos.sh` (it checks the licence file, bundles the agents
+   a macOS arm64 job and two Linux jobs (x86_64, arm64; `scripts/package-linux.sh`) build the packages with them,
+   and a last job writes `SHA256SUMS`, attests every file and creates a **draft** release. Running the workflow by
+   hand (Actions > Release > Run workflow) builds the packages as workflow artifacts without a release, to test a
+   change first. To build by hand instead: `scripts/package-macos.sh` (it checks the licence file, bundles the agents
    and licences, and runs `codesign --verify --deep --strict`), then copy the `.dmg` into an empty folder and run
    `scripts/release-checksums.sh <folder>`.
 7. **Check the draft.** Download the `.dmg` and `SHA256SUMS` from the draft and run the README commands:
@@ -63,8 +65,10 @@ end
 
 ## Linux
 
-No desktop package yet. Users build from source (README "Build from source"); `scripts/build-agents.sh` builds the
-static agents that remote repositories use.
+`scripts/package-linux.sh` builds the AppImage, `.deb` and `.rpm` for the machine's architecture (on Ubuntu 22.04 in
+CI, so they run on glibc 2.35 or newer) and checks that the licences and both agents are inside the `.deb`. The
+packages are not signed. Test on a Linux desktop before publishing: install the `.deb` or run the AppImage, open a
+local and a remote repository (the remote one proves the bundled agent is found under `/usr/lib/commit.kiwi/agents`).
 
 ## Signing and notarization
 

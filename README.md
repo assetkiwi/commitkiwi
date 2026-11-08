@@ -54,8 +54,19 @@ gh attestation verify commit.kiwi_<version>_aarch64.dmg --repo OWNER/REPO
 (`OWNER/REPO` is this repository's path on GitHub.) A Homebrew tap may follow; it would install the same unnotarized
 build and show the same Open Anyway steps. There is no auto-update yet: check the Releases page for new versions.
 
-Linux: no desktop package yet (build from source). The Linux agent for remote repositories is built and bundled with
-the macOS app.
+## Install (Linux, x86_64 and arm64): experimental
+
+Each release has an AppImage, a `.deb` (Debian, Ubuntu) and an `.rpm` (Fedora, openSUSE) for x86_64 and arm64
+(aarch64), built on Ubuntu 22.04 (glibc 2.35 or newer). They need WebKitGTK 4.1, which most current desktops have.
+
+```sh
+sudo apt install ./commit.kiwi_<version>_amd64.deb        # or _arm64.deb
+sudo dnf install ./commit.kiwi-<version>-1.x86_64.rpm      # or .aarch64.rpm
+chmod +x commit.kiwi_<version>_amd64.AppImage && ./commit.kiwi_<version>_amd64.AppImage
+```
+
+The packages are not signed; verify them with `SHA256SUMS` and `gh attestation verify` as above. The commit message
+model runs on the CPU on Linux (no GPU acceleration), so suggestions take longer than on a Mac.
 
 ## Build from source
 

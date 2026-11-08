@@ -448,6 +448,7 @@ fn agent_dirs(exe_dir: Option<&std::path::Path>) -> Vec<PathBuf> {
     if let Some(d) = exe_dir {
         dirs.push(d.join("agents"));
         dirs.push(d.join("../Resources/agents")); // macOS bundle
+        dirs.push(d.join("../lib/commit.kiwi/agents")); // Linux .deb/.rpm/AppImage: /usr/bin + /usr/lib/<productName>
     }
     // `cargo run` / `tauri dev`: the exe sits in target/debug, but scripts/build-agents.sh writes to <repo>/agents.
     if cfg!(debug_assertions) {
@@ -533,6 +534,13 @@ mod tests {
         // tauri.conf.json bundle.resources puts the agents at Contents/Resources/agents/<platform>/commitkiwi-agent
         let dirs = agent_dirs(Some(std::path::Path::new("/Applications/commit.kiwi.app/Contents/MacOS")));
         assert!(dirs.contains(&PathBuf::from("/Applications/commit.kiwi.app/Contents/MacOS/../Resources/agents")), "{dirs:?}");
+    }
+
+    #[test]
+    fn linux_packages_search_usr_lib() {
+        // Tauri puts bundle.resources at /usr/lib/<productName>/ next to /usr/bin (also inside the AppImage)
+        let dirs = agent_dirs(Some(std::path::Path::new("/usr/bin")));
+        assert!(dirs.contains(&PathBuf::from("/usr/bin/../lib/commit.kiwi/agents")), "{dirs:?}");
     }
 
     /// Runs the very script the remote gets, with `sh -c` in a temp HOME.
