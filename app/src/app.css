@@ -41,6 +41,7 @@ svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-widt
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
 button:disabled { cursor: default; opacity: .55; }
 input { font: inherit; color: var(--text); }
+input[type="search"] { -webkit-appearance: none; appearance: none; } /* WebKit draws its own search box (ignores our border and height) */
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 6px; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 10px; border: 3px solid transparent; background-clip: content-box; }
@@ -153,6 +154,8 @@ button.tab { padding-right: 12px; }
 .locations h1 { margin: 0; font-size: 18px; } .locations h2 { margin: 0; font-size: 13px; color: var(--muted); font-weight: 600; }
 .locations label { display: flex; flex-direction: column; gap: 6px; color: var(--text-2); font-weight: 500; }
 .locations input { height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface-2); flex: 1; min-width: 0; }
+/* a direct child of the card's column: flex: 1 would collapse its height; type=search brings a native look in WebKit */
+.locations input[type="search"] { flex: none; }
 .field { display: flex; gap: 8px; }
 .btn { height: 34px; padding: 0 12px; border-radius: var(--radius-control); background: var(--surface-2); border: 1px solid var(--border-strong); }
 .seg { display: grid; grid-template-columns: repeat(2, 1fr); padding: 3px; background: var(--bg); border-radius: 9px; border: 1px solid var(--border); }

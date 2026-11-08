@@ -169,6 +169,12 @@ const filter = page.getByRole("searchbox", { name: "Filter recent repositories" 
 await filter.waitFor();
 await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Filter recent repositories");
 const rows = () => page.locator(".recent li .p").allInnerTexts();
+// styled like the other fields of the page: same height, a visible border (it once collapsed to a thin pill)
+const box = (loc) => loc.evaluate((el) => { const c = getComputedStyle(el), r = el.getBoundingClientRect(); return { h: Math.round(r.height), border: c.borderTopWidth, look: c.appearance }; });
+const fb = await box(filter), pb = await box(page.getByPlaceholder("~/projects/my-repo"));
+assert.equal(fb.h, pb.h, `filter height ${fb.h} matches the folder field ${pb.h}`);
+assert.equal(fb.border, "1px");
+assert.equal(fb.look, "none");
 const recentAll = await rows();
 assert.ok(recentAll.length >= 2, "recent holds the cloned and the new repo");
 await filter.fill("frsh");
