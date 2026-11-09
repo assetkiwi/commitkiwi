@@ -1104,9 +1104,7 @@
             {#if pending[1]}<span class="m">{pending[1]}</span>{/if}
           </span>
         </button>
-        {#key tab.rev}
-          <CommitList {tab} filter={search !== null ? found?.rows ?? null : null} active={view === "commit"} onpick={() => { pane = "commits"; view = "commit"; }} onselect={(c, f) => { selected = c; from = f; }} oncontext={commitMenu} {target} onconsumed={() => (target = null)} />
-        {/key}
+        <CommitList {tab} filter={search !== null ? found?.rows ?? null : null} active={view === "commit"} onpick={() => { pane = "commits"; view = "commit"; }} onselect={(c, f) => { selected = c; from = f; }} oncontext={commitMenu} {target} onconsumed={() => (target = null)} />
       {:else}
         <FilesPane {tab} bind:mode={filesMode} filter={filters.files} onfilterclose={() => (filters.files = false)}
           {work} showWork={view === "work"} commit={selected} {from} {treeOid} {current}
@@ -1132,8 +1130,9 @@
             onjump={jumpTo} />
         {/key}
       {:else if selected}
-        {#key `${selected.oid}:${from?.oid ?? ""}`}<CommitDetail {tab} commit={selected} {from} bind:focus={commitFile} onjump={jumpTo}
-          editing={editingMsg === selected.oid && !from} onsavemessage={(m) => saveMessage(selected!.oid, m)} oncancelmessage={() => (editingMsg = null)} />{/key}
+        <!-- not keyed: CommitDetail swaps to the next commit itself once it has loaded, so the pane never blanks -->
+        <CommitDetail {tab} commit={selected} {from} bind:focus={commitFile} onjump={jumpTo}
+          editing={editingMsg === selected.oid && !from} onsavemessage={(m) => saveMessage(selected!.oid, m)} oncancelmessage={() => (editingMsg = null)} />
       {:else}
         <div class="empty"><div><h2>{tab.total ? "Select a commit" : "No commits yet"}</h2></div></div>
       {/if}

@@ -17,6 +17,8 @@ export interface Cache {
   /** cursor row and the selected rows (real indices); more than one = a range diff ("Diffing From") */
   sel: number;
   multi: number[];
+  /** the tab.rev the pages, graph and collapsed rows describe (null: nothing loaded yet) */
+  rev: number | null;
 }
 const caches = new Map<string, Cache>();
 const DETAIL_CACHE = 200;
@@ -24,7 +26,7 @@ const DETAIL_CACHE = 200;
 export function cacheFor(tabId: string): Cache {
   let c = caches.get(tabId);
   if (!c) {
-    c = { pages: new Map(), loading: new Set(), files: new Map(), asked: new Set(), graph: null, layout: null, collapsed: new Set(), details: new Map(), scrollTop: 0, sel: 0, multi: [0] };
+    c = { pages: new Map(), loading: new Set(), files: new Map(), asked: new Set(), graph: null, layout: null, collapsed: new Set(), details: new Map(), scrollTop: 0, sel: 0, multi: [0], rev: null };
     caches.set(tabId, c);
   }
   return c;

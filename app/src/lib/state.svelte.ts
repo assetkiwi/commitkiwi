@@ -234,10 +234,12 @@ export function closeTab(id: string): void {
   persist();
 }
 
-/** Re-read HEAD, refs and the commit count after history changed (commit, amend), and drop cached pages. */
+/** Re-read HEAD, refs and the commit count after history changed (commit, amend); the commit list refreshes itself. */
 export async function reloadTab(tab: Tab): Promise<void> {
   const fresh = await loadTab(tab.location, tab.path);
-  dropCache(tab.id);
+  // nothing moved (a fetch that found nothing, a refresh): leave everything as it is, so nothing redraws
+  if (fresh.total === tab.total && JSON.stringify([fresh.info, fresh.refs, fresh.hidden]) === JSON.stringify([tab.info, tab.refs, tab.hidden])) return;
+  // the commit list swaps its pages in place (CommitList); details and file counts are per commit and stay valid
   tab.info = fresh.info;
   tab.refs = fresh.refs;
   tab.total = fresh.total;

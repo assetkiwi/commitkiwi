@@ -633,3 +633,16 @@ span.fh { cursor: default; } span.fh:hover { background: none; }
 .db-badge.dirty, .db-badge.ahead { background: var(--accent-soft); color: var(--accent-text); border-color: transparent; }
 .db-badge.behind, .db-badge.diverged, .db-badge.error { background: var(--del-bg); color: var(--del-fg); border-color: transparent; }
 .db-actions { text-align: right; } .db-actions .btn + .btn { margin-left: 4px; }
+
+/* ---- short fades: things appear instead of cutting in (nothing animates out, nothing waits on an animation) */
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes ov-in { from { opacity: 0; transform: translate(-50%, -4px); } }
+.tabview:not(.off) { animation: fade-in .12s ease-out; }
+.scrim.dim { animation: fade-in .12s ease-out; }
+.overlay { animation: ov-in .1s ease-out; }
+.popup { animation: fade-in .08s ease-out; }
+.dscroll { transition: opacity .12s; } .dscroll.waiting { opacity: .55; } /* the next commit is loading; the previous one stays until it is there */
+@media (prefers-reduced-motion: reduce) {
+  .tabview:not(.off), .scrim.dim, .overlay, .popup { animation: none; }
+  .dscroll { transition: none; }
+}

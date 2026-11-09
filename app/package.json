@@ -10,7 +10,7 @@
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "tauri": "tauri",
     "test": "node --experimental-strip-types --test src/lib/*.test.ts",
-    "e2e": "node e2e/smoke.mjs && node e2e/gone.mjs && node e2e/keys.mjs && node e2e/branch.mjs && node e2e/m5b.mjs && node e2e/menus.mjs && node e2e/m6.mjs && node e2e/prefs.mjs && node e2e/m7b.mjs && node e2e/m8.mjs && node e2e/lazy.mjs && node e2e/rowwidth.mjs && node e2e/forge.mjs && node e2e/llm.mjs && node e2e/nlsearch.mjs && node e2e/config.mjs && node e2e/cleanup.mjs && node e2e/tabs.mjs && node e2e/dashboard.mjs && node e2e/rebase.mjs"
+    "e2e": "node e2e/smoke.mjs && node e2e/gone.mjs && node e2e/keys.mjs && node e2e/branch.mjs && node e2e/m5b.mjs && node e2e/menus.mjs && node e2e/m6.mjs && node e2e/prefs.mjs && node e2e/m7b.mjs && node e2e/m8.mjs && node e2e/lazy.mjs && node e2e/rowwidth.mjs && node e2e/forge.mjs && node e2e/llm.mjs && node e2e/nlsearch.mjs && node e2e/config.mjs && node e2e/cleanup.mjs && node e2e/tabs.mjs && node e2e/dashboard.mjs && node e2e/rebase.mjs && node e2e/smooth.mjs"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.1",

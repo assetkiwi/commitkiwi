@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
   import { copy } from "../lib/clipboard";
   import { loadDetail } from "../lib/commitCache";
@@ -12,7 +13,7 @@
   import DetailTabs from "./DetailTabs.svelte";
 
   const AUTO_FILES = 10, AUTO_LINES = 2000, FILE_PAGE = 300;
-  let { tab, commit, from = null, focus = $bindable(null), stash = null, onjump, editing = false, onsavemessage, oncancelmessage }: {
+  let { tab, commit: live, from: liveFrom = null, focus = $bindable(null), stash = null, onjump, editing = false, onsavemessage, oncancelmessage }: {
     tab: Tab; commit: Commit;
     /** oldest commit of a multi-selection: show the combined change since its parent */
     from?: Commit | null;
@@ -40,6 +41,11 @@
     else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); oncancelmessage?.(); }
   }
 
+  // What is on screen: a commit with its detail, moved together when the next one has loaded. Until then the
+  // previous one stays (dimmed after a moment), so arrowing through history does not blank the pane.
+  let shown = $state.raw<{ commit: Commit; from: Commit | null }>({ commit: untrack(() => live), from: untrack(() => liveFrom) });
+  const commit = $derived(shown.commit), from = $derived(shown.from);
+  let waiting = $state(false);
   let detail = $state<Detail | null>(null);
   let error = $state("");
   let showFiles = $state(FILE_PAGE);
@@ -62,18 +68,20 @@
   }
 
   $effect(() => {
-    const [oid, base] = [commit.oid, from?.oid ?? null];
-    showFiles = FILE_PAGE;
+    const [next, nextFrom] = [live, liveFrom];
+    const [oid, base] = [next.oid, nextFrom?.oid ?? null];
     error = "";
-    detail = null;
-    closed.clear();
-    let live = true;
+    let current = true;
+    const slow = setTimeout(() => { if (current) waiting = true; }, 150); // a cached commit never shows it
     loadDetail(tab, oid, base).then((d) => {
-      if (!live) return;
+      if (!current) return;
+      shown = { commit: next, from: nextFrom };
+      showFiles = FILE_PAGE;
+      closed.clear();
       detail = d;
       autoOpen(d);
-    }).catch((e) => { if (live) error = String(e); });
-    return () => { live = false; };
+    }).catch((e) => { if (current) error = String(e); }).finally(() => { if (current) { clearTimeout(slow); waiting = false; } });
+    return () => { current = false; clearTimeout(slow); };
   });
 
   async function doCopy(what: string, text: string) {
@@ -119,7 +127,7 @@
 
 <div class="details">
   <DetailTabs tabs={fileTabs} active={focused ? focus : null} onpick={(k) => (focus = k)} onclose={closeTab} />
-  <div class="dscroll">
+  <div class="dscroll" class:waiting>
     {#if error}<p class="err" role="alert">{error}</p>{/if}
     {#if !detail && !error}<p class="hint">Loading…</p>{/if}
     {#if detail && focused}

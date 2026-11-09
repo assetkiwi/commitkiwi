@@ -735,6 +735,7 @@ await page.waitForFunction((n) => globalThis.__mockCalls.filter((c) => c.Count).
 await page.waitForTimeout(150);
 
 // commit rows: HEAD subject bold, lane-coloured pill + `⑂ +N`, text indented by that row's own graph width
+await page.locator(".list").evaluate((el) => { el.scrollTop = 0; }); // a reload keeps the scroll position (it no longer remounts)
 await page.locator("#row-0").click();
 await page.locator("#row-0.sel").waitFor();
 await page.locator("#row-0 .s.headc").waitFor();

@@ -234,8 +234,9 @@ wv.__mockConnection = (location, lost) => {
 };
 
 // Every request by kind (`__mockReqs.Log`), and `__mockWorkAdd(path)` adds an untracked file (for "changed while hidden").
-const wr = globalThis as unknown as { __mockReqs: Record<string, number>; __mockWorkAdd: (path: string) => void };
+const wr = globalThis as unknown as { __mockReqs: Record<string, number>; __mockDelay: Record<string, number>; __mockWorkAdd: (path: string) => void };
 wr.__mockReqs = {};
+wr.__mockDelay = {}; // `__mockDelay.Show = 900`: ms a kind of request takes (default 8, 80 on a remote)
 wr.__mockWorkAdd = (path) => { work = [...work, { path, old_path: null, index: ".", worktree: "?", kind: "untracked" }]; };
 // Interactive rebase: rows `__mockPushedFrom` and older are on origin; without a start the editor lists the newer ones.
 // A start at row 40 or older reaches the merge there and is refused, like core. `__mockRebaseRefuse`: Apply fails so.
@@ -269,7 +270,7 @@ function mockOverview(location: string, repo: string) {
 export async function mockRpc(location: string, req: Req): Promise<any> {
   const kind = typeof req === "string" ? req : Object.keys(req)[0];
   wr.__mockReqs[kind] = (wr.__mockReqs[kind] ?? 0) + 1;
-  await new Promise((r) => setTimeout(r, location === "local" ? 8 : 80)); // remote feels slower
+  await new Promise((r) => setTimeout(r, wr.__mockDelay[kind] ?? (location === "local" ? 8 : 80))); // remote feels slower
   if (down.has(location)) throw `Disconnected, reconnecting… (${down.get(location)})`;
   if (req === "Hello") return { Hello: { proto: 1 } };
   if ("Job" in req) return mockJob(location, req.Job.job, req.Job.req);

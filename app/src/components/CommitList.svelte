@@ -29,6 +29,18 @@
   } = $props();
 
   const cache = $derived(cacheFor(tab.id));
+  // Pages and graph describe one tab.rev. A list that was away (Files pane, other tab) while history moved starts
+  // clean; a mounted one refreshes in place (refresh below), so rows never blank out.
+  untrack(() => {
+    if (cache.rev !== null && cache.rev !== tab.rev) {
+      cache.pages.clear(); cache.loading.clear(); cache.graph = null; cache.layout = null; cache.collapsed.clear();
+      cache.scrollTop = 0; cache.sel = 0; cache.multi = [0];
+    }
+    cache.rev = tab.rev;
+  });
+  /** the row count `cache` describes: follows tab.total only when a refresh swaps the new data in */
+  let listTotal = $state(untrack(() => tab.total));
+  let epoch = 0; // bumped at each swap: a page request from before it is dropped
   // Caches are plain Maps (cheap for 100k+ commits); `version` is bumped whenever they change.
   let version = $state(0);
   let scrollTop = $state(0);
@@ -43,7 +55,7 @@
   let picked = $state.raw<number[]>([0]);
   let anchor = 0;
 
-  const total = $derived(shown ? shown.length : tab.total);
+  const total = $derived(shown ? shown.length : listTotal);
   const realOf = (v: number) => (shown ? shown[v] : v);
   const posOf = (r: number) => (shown ? positionOf(shown, r) : r);
   const isPicked = $derived(new Set(picked));
@@ -66,8 +78,8 @@
   }
 
   onMount(() => {
-    cursor = Math.min(cache.sel, Math.max(0, tab.total - 1));
-    picked = cache.multi.filter((r) => r < tab.total);
+    cursor = Math.min(cache.sel, Math.max(0, listTotal - 1));
+    picked = cache.multi.filter((r) => r < listTotal);
     if (!picked.length) picked = [cursor];
     anchor = cursor;
     el.scrollTop = cache.scrollTop; // coming back to a tab keeps its place
@@ -83,6 +95,52 @@
         rebuild();
       }).catch(() => {});
     }
+  });
+
+  /** History moved (commit, fetch, checkout, ...): fetch the new graph and first pages while the old rows stay on
+   *  screen, then swap them in one step, keeping the same commit selected and at the same place on screen. */
+  let refreshing = 0;
+  async function refresh(rev: number) {
+    const mine = ++refreshing;
+    const newTotal = tab.total, hidden = tab.hidden;
+    // the commit to hold still: the selected one when its row is loaded, else the one at the top of the screen
+    const at = (r: number) => cache.pages.get(Math.floor(r / PAGE))?.[r % PAGE];
+    const top = Math.min(realOf(Math.max(0, Math.min(total - 1, Math.floor(el.scrollTop / ROW)))), Math.max(0, listTotal - 1));
+    const heldRow = at(cursor) ? cursor : top, held = at(heldRow);
+    const offset = posOf(heldRow) * ROW - el.scrollTop;
+    const want = new Set([0, Math.floor(heldRow / PAGE)]);
+    try {
+      const [g, ...got] = await Promise.all([api.graph(tab.location, tab.path, hidden), ...[...want].map((p) => api.log(tab.location, tab.path, p * PAGE, PAGE, hidden))]);
+      if (mine !== refreshing) return; // a newer refresh took over
+      const pages = new Map([...want].map((p, k) => [p, got[k]] as const));
+      const newAt = (r: number) => pages.get(Math.floor(r / PAGE))?.[r % PAGE];
+      // how far the held commit moved (a commit on top pushes everything down by one)
+      let shift = 0;
+      if (held) for (const [p, list] of pages) { const k = list.findIndex((c) => c.oid === held.oid); if (k >= 0) { shift = p * PAGE + k - heldRow; break; } }
+      // merges: keep each one's collapsed state by commit; rows we cannot name take the common state
+      const merges = (ps: number[][]) => ps.reduce((n, x) => n + (x.length > 1 ? 1 : 0), 0);
+      const old = cache.graph, was = new Map<string, boolean>();
+      old?.parents.forEach((ps, i) => { const c = at(i); if (ps.length > 1 && c) was.set(c.oid, cache.collapsed.has(i)); });
+      // shortcut: a mix of collapsed and open merges is remembered only for rows whose page is loaded
+      const fallback = !cache.collapsed.size ? false : old && cache.collapsed.size === merges(old.parents) ? true : !app.prefs.expand_merge_commits_by_default;
+      const collapsed = new Set<number>();
+      g.parents.forEach((ps, i) => { if (ps.length > 1 && (newAt(i) ? was.get(newAt(i)!.oid) ?? fallback : fallback)) collapsed.add(i); });
+
+      epoch++;
+      cache.pages = pages; cache.loading.clear(); cache.graph = g; cache.collapsed = collapsed; cache.rev = rev;
+      listTotal = newTotal;
+      const move = (r: number) => Math.max(0, Math.min(newTotal - 1, r + shift));
+      cursor = move(cursor); picked = picked.map(move); anchor = move(anchor);
+      cache.sel = cursor; cache.multi = picked;
+      rebuild();
+      version++;
+      await tick();
+      el.scrollTop = Math.max(0, posOf(move(heldRow)) * ROW - offset);
+    } catch { /* briefly unavailable: the old rows stay, the next change tries again */ }
+  }
+  $effect(() => {
+    const rev = tab.rev;
+    untrack(() => { if (cache.rev !== rev) void refresh(rev); });
   });
 
   // entering search keeps a selected result (else picks the first); leaving restores the scroll position,
@@ -128,7 +186,7 @@
 
   $effect(() => {
     const t = target;
-    if (!t || t.index >= tab.total) return;
+    if (!t || t.index >= listTotal) return;
     if (shown && posOf(t.index) < 0) { cache.collapsed.clear(); rebuild(); } // jumping into a collapsed merge opens them all
     select(t.index);
     el.scrollTop = Math.max(0, posOf(t.index) * ROW - height / 2 + ROW / 2);
@@ -138,14 +196,17 @@
   async function loadPage(p: number) {
     if (cache.pages.has(p) || cache.loading.has(p)) return;
     cache.loading.add(p);
+    const mine = epoch;
     try {
-      cache.pages.set(p, await api.log(tab.location, tab.path, p * PAGE, PAGE, tab.hidden));
+      const page = await api.log(tab.location, tab.path, p * PAGE, PAGE, tab.hidden);
+      if (mine !== epoch) return;
+      cache.pages.set(p, page);
       error = "";
       version++;
     } catch (e) {
-      error = String(e);
+      if (mine === epoch) error = String(e);
     } finally {
-      cache.loading.delete(p);
+      if (mine === epoch) cache.loading.delete(p);
     }
   }
 
@@ -249,7 +310,7 @@
   aria-multiselectable="true"
   aria-activedescendant={`row-${cursor}`}
 >
-  {#if !tab.total}<p class="hint pad">No commits yet.</p>{/if}
+  {#if !listTotal}<p class="hint pad">No commits yet.</p>{/if}
   {#if error}<p class="err pad" role="alert">{error}</p>{/if}
   <div style:height="{total * ROW + 8}px"></div>
   {#each rows as v (v)}
