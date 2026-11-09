@@ -59,7 +59,7 @@ Every preference, with its default (the example file lists them all, commented o
 	"diff_style": "split",              // or "unified"
 	"diff_context_lines": 3,
 	"ignore_diff_white_space": false,
-	"word_diff": true,
+	"word_diff": false,              // true: shade the changed words inside a changed line
 	"diff_syntax_colors": true,
 	"word_wrap": false,                 // wrap long lines in unified diffs
 	"editor_command": "open -t {path}", // {path} is filled in, no shell (Linux: "xdg-open {path}")

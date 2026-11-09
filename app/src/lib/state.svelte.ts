@@ -53,7 +53,7 @@ export interface DiffSettings {
 }
 const isMac = typeof navigator !== "undefined" && navigator.userAgent.includes("Mac");
 export const DIFF_DEFAULTS: DiffSettings = {
-  mode: "split", context: 3, ignoreWs: false, words: true, syntax: true, wrap: false,
+  mode: "split", context: 3, ignoreWs: false, words: false, syntax: true, wrap: false,
   editorLocal: isMac ? "open -t {path}" : "xdg-open {path}",
   editorRemote: "code --remote ssh-remote+{host} {path}",
 };

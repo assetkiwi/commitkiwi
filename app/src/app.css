@@ -276,7 +276,7 @@ button.chip { cursor: pointer; }
 .diff .mk::before { content: attr(data-m); } /* pseudo-element text can't be selected or copied, even where WKWebView ignores unprefixed user-select */
 .diff .mk, .diff .ln > span:nth-child(-n+2) { -webkit-user-select: none; }
 .diff .add .mk { color: var(--add-fg); } .diff .del .mk { color: var(--del-fg); }
-mark.wd { color: inherit; border-radius: 3px; padding: 0; }
+mark.wd { color: inherit; border-radius: 0; padding: 0; } /* square: a mark is split at every syntax span, rounded ends would notch the band */
 .diff .add mark.wd, .diff .half.add mark.wd { background: var(--wd-add); } .diff .del mark.wd, .diff .half.del mark.wd { background: var(--wd-del); }
 
 .dtool { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 0 0 12px; padding: 8px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); font-size: 12px; color: var(--text-2); }

@@ -117,8 +117,11 @@ await page.locator(".imgdiff img").nth(1).waitFor();
 assert.equal(await page.locator(".imgdiff img").count(), 2);
 assert.ok((await page.locator(".imgdiff img").first().getAttribute("src")).startsWith("data:image/png;base64,"));
 
-// syntax colors and word-level marks on the paired -/+ lines
+// syntax colors and word-level marks on the paired -/+ lines (word diff is off by default: one even band per line)
 await cj.locator(".diff .ln.add .hljs-string").first().waitFor();
+assert.equal(await page.locator("mark.wd").count(), 0, "no word marks by default");
+await page.getByLabel("Word diff").check();
+await cj.locator(".diff .ln.add mark.wd").first().waitFor();
 assert.ok((await cj.locator(".diff .ln.add mark.wd").allInnerTexts()).includes("3")); // "^8.1" -> "^8.3": the changed word is marked
 assert.ok((await cj.locator(".diff .ln.del mark.wd").allInnerTexts()).includes("1"));
 assert.ok(!(await cj.locator(".diff .ln.add mark.wd").allInnerTexts()).includes("php"), "shared words are not marked");
