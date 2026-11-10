@@ -9,7 +9,7 @@
   import { filterRecent } from "../lib/recentFilter";
   import { fuzzy } from "../lib/fuzzy";
   import { cloneName, cloneUrlError, folderNameError, folderPathError } from "../lib/repoSetup";
-  import { app, hostOf, openRepo } from "../lib/state.svelte";
+  import { app, hostOf, openRepo, removeRecent } from "../lib/state.svelte";
   import { showAddRepos } from "../lib/ui.svelte";
   import Console from "./Console.svelte";
 
@@ -131,7 +131,7 @@
               <li class:on={filtering && i === index}><button disabled={!!busy} tabindex="-1" onclick={() => openRecent(r)}>
                 <svg class="i"><use href={hostOf(r.location) ? "#i-server" : "#i-folder"} /></svg>
                 <span class="p">{r.path}</span><span class="h">{hostOf(r.location) || "local"}</span>
-              </button></li>
+              </button><button class="ib rm" aria-label="Remove {r.path} from recent repositories" title="Remove from the list" onclick={() => removeRecent(r)}><svg class="i"><use href="#i-x" /></svg></button></li>
             {/each}
           </ul>
         {:else}<p class="hint" role="status">No matches</p>{/if}

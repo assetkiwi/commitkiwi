@@ -31,7 +31,7 @@
     const gap = tabs.findIndex((r) => clientX < r.left + r.width / 2);
     const at = gap < 0 ? tabs.length : gap;
     const edge = at < tabs.length ? tabs[at].left : tabs[tabs.length - 1].right;
-    return { gap: at, x: edge - bar!.getBoundingClientRect().left - 1 };
+    return { gap: at, x: edge - bar!.getBoundingClientRect().left + bar!.scrollLeft - 1 };
   }
   function move(e: PointerEvent) {
     if (!press || e.pointerId !== press.pointer) return;
@@ -52,6 +52,17 @@
     moveTab(d.id, d.gap > from ? d.gap - 1 : d.gap);
     setActive(d.id); // as browsers do: the tab you dragged is the one you look at
   }
+  // the strip scrolls when the tabs outgrow it: a vertical wheel scrolls it sideways, and the active tab stays in view
+  function wheel(e: WheelEvent) {
+    if (e.deltaX || !e.deltaY) return;
+    e.preventDefault();
+    bar!.scrollLeft += e.deltaY;
+  }
+  $effect(() => {
+    void app.active;
+    void app.tabs.length;
+    bar?.querySelector(".tab.on")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  });
   function key(e: KeyboardEvent) {
     if (e.key !== "Escape" || !drag) return;
     e.preventDefault();
@@ -62,7 +73,8 @@
 </script>
 
 <svelte:window onpointermove={move} onpointerup={up} onpointercancel={up} onkeydowncapture={key} />
-<nav class="tabbar" class:dragging={!!drag} aria-label="Open repositories" bind:this={bar}>
+<nav class="tabbar" class:dragging={!!drag} aria-label="Open repositories">
+  <div class="tabs" bind:this={bar} onwheel={wheel}>
   {#each app.tabs as t, index (t.id)}
     <div class="tab" class:on={app.active === t.id} class:dirty={t.dirty} class:lifted={drag?.id === t.id} data-id={t.id} role="presentation"
       oncontextmenu={(e) => showContextMenu(e, TAB, { index })} onpointerdown={(e) => down(e, t.id)} onauxclick={(e) => { if (e.button === 1) closeTab(t.id); }}>
@@ -80,6 +92,7 @@
   {:else if app.active === "locations" || !app.tabs.length}
     <div class="tab on"><span class="tab-main"><svg class="i"><use href="#i-folder" /></svg>New Tab</span></div>
   {/if}
+  </div>
   <span class="grow" data-tauri-drag-region></span>
   <button class="ib sm" aria-label="List tabs" title="Tabs" onclick={listMenu}><svg class="i"><use href="#i-down" /></svg></button>
   <button class="ib sm" aria-label="New tab" title="New Tab" onclick={() => setActive("locations")}><svg class="i"><use href="#i-plus" /></svg></button>
