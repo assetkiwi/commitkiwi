@@ -69,6 +69,7 @@ Every preference, with its default (the example file lists them all, commented o
 	"expand_merge_commits_by_default": true,
 	"terminal_command": "open -a Terminal {path}",
 	"confirm_destructive": true,
+	"update_check": true,               // check for a new version at startup
 	"agent_cleanup_days": 30,           // 0: never remove old remote agents
 	"commit_model": "",
 	"commit_suggest": true,

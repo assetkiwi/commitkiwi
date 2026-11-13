@@ -52,7 +52,9 @@ gh attestation verify commit.kiwi_<version>_aarch64.dmg --repo OWNER/REPO
 ```
 
 (`OWNER/REPO` is this repository's path on GitHub.) A Homebrew tap may follow; it would install the same unnotarized
-build and show the same Open Anyway steps. There is no auto-update yet: check the Releases page for new versions.
+build and show the same Open Anyway steps. From 0.1.6 on the app checks for updates at startup (and with Help > Check for Updates…): the macOS app and the
+Linux AppImage download the signed update, install it and restart; `.deb`/`.rpm` installs get a link to the Releases
+page. Turn the startup check off in Preferences > General.
 
 ## Install (Linux, x86_64 and arm64): experimental
 

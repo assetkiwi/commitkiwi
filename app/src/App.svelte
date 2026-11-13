@@ -12,6 +12,7 @@
   import AskPass from "./components/AskPass.svelte";
   import ModelDownload from "./components/ModelDownload.svelte";
   import { startLlm } from "./lib/llm.svelte";
+  import { checkForUpdates, dismissUpdate, installUpdate, openReleases, update } from "./lib/updater.svelte";
   import PopupMenu from "./components/PopupMenu.svelte";
   import TabBar from "./components/TabBar.svelte";
   import Locations from "./components/Locations.svelte";
@@ -24,7 +25,8 @@
     const offMenu = installNativeMenu();
     void loadKeymap();
     void loadUserConfig();
-    void init();
+    // the update check waits for the saved preferences (it may be switched off)
+    void init().then(() => { if (app.prefs.update_check) void checkForUpdates(false); });
     startLlm();
     // macOS dims an inactive window; so do we. Focus also picks up edits to the user's command/menu files.
     const dim = (on: boolean) => () => document.documentElement.classList.toggle("inactive", on);
@@ -56,6 +58,15 @@
 <AskPass />
 <ModelDownload />
 <PopupMenu />
+{#if update.version}
+  <div class="banner update" role="status">
+    <span class="t">commit.kiwi {update.version} is available.</span>
+    {#if update.busy}<span>{update.busy}</span>
+    {:else if update.installable}<button class="btn sm" onclick={installUpdate}>Install and Restart</button>
+    {:else}<button class="btn sm" onclick={openReleases}>Download…</button>{/if}
+    <button class="ib" aria-label="Dismiss" disabled={!!update.busy} onclick={dismissUpdate}><svg class="i"><use href="#i-x" /></svg></button>
+  </div>
+{/if}
 {#if app.notice}
   <div class="banner" role="status">{app.notice}<button class="ib" aria-label="Dismiss" onclick={() => (app.notice = "")}><svg class="i"><use href="#i-x" /></svg></button></div>
 {/if}

@@ -34,7 +34,22 @@ static Linux agents for remote repositories ship inside every package.
    Install it on a Mac that has never run commit.kiwi and follow the README's Open Anyway steps; open a local and a
    remote repository; open Help > About commit.kiwi & Licenses… and the third-party licences.
 8. **Publish** the draft with the release notes. Say plainly that the build is not notarized, how to allow it
-   (README "Install"), and that there is no auto-update: users download new versions from the Releases page.
+   (README "Install"). Publishing is what offers the update in-app: the app reads `latest.json` from the latest
+   published release, so drafts are never offered.
+
+## In-app updates
+
+The Tauri updater (`tauri-plugin-updater`) checks
+`https://github.com/OWNER/REPO/releases/latest/download/latest.json`. Updates are signed with the project's own
+updater key (minisign, independent of Apple code signing); the public key is `plugins.updater.pubkey` in
+`tauri.conf.json`, the private key and its password are the repository secrets `TAURI_SIGNING_PRIVATE_KEY` and
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. `bundle.createUpdaterArtifacts` makes `tauri build` sign the macOS
+`.app.tar.gz` and the AppImage (a `.sig` next to each), so building a package by hand needs those two variables set.
+The release job renames the macOS bundle to `commit.kiwi_<version>_aarch64.app.tar.gz` and writes `latest.json`
+(`scripts/updater-manifest.sh`).
+
+Keep the private key safe and backed up: losing it means installed apps can no longer verify (and so never install)
+an update, and every user has to download the next version by hand.
 
 ## Homebrew tap (optional)
 

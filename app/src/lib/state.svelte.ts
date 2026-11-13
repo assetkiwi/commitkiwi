@@ -94,6 +94,8 @@ export interface Prefs {
   cleanup_stale_days: number;
   /** Clean Up Branches never offers these (`*` globs, matched without the remote name) */
   cleanup_protected_branches: string[];
+  /** check for a new version at startup (Help > Check for Updates… works either way) */
+  update_check: boolean;
 }
 export const PREF_DEFAULTS: Prefs = {
   ui_font_size: 13, font_size: 12, expand_merge_commits_by_default: true,
@@ -102,6 +104,7 @@ export const PREF_DEFAULTS: Prefs = {
   commit_model: "", commit_suggest: true, natural_search: false, forge_hosts: {}, gh_path: "", glab_path: "", open_request_after_create: true,
   keymap_preset: "default",
   cleanup_stale_days: 90, cleanup_protected_branches: ["main", "master", "develop", "trunk", "release/*"],
+  update_check: true,
 };
 /** Allowed values where a type check is not enough. */
 const PREF_CHOICES: Partial<Record<keyof Prefs, unknown[]>> = { keymap_preset: ["default", "sublime-style"] };
@@ -503,6 +506,7 @@ const SETTING_NOTES: Record<string, string> = {
   open_request_after_create: "open a new pull/merge request in the browser", keymap_preset: `"default" or "sublime-style"; keymap.json goes on top`,
   cleanup_stale_days: "Clean Up Branches: stale after this many days without a commit (0: off)",
   cleanup_protected_branches: "Clean Up Branches never offers these (* matches anything, e.g. release/*)",
+  update_check: "check for a new version at startup",
 };
 /** settings.json's first content: every setting commented out, with its default and a note. */
 export function settingsExample(): string {

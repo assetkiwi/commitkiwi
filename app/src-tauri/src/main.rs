@@ -318,6 +318,13 @@ fn open_editor(template: String, path: String, host: String) -> Result<(), Strin
     Ok(())
 }
 
+/// Can this build replace itself (the updater)? The macOS app and the Linux AppImage can; a .deb or .rpm install
+/// belongs to the package manager, so it only hears that a new version exists.
+#[tauri::command]
+fn update_installable() -> bool {
+    cfg!(target_os = "macos") || std::env::var_os("APPIMAGE").is_some()
+}
+
 /// Help > About commit.kiwi & Licenses…: open the bundled THIRD-PARTY-LICENSES.md (only that file) with the OS
 /// opener; `tauri dev` builds without the bundle fall back to the repository's copy.
 #[tauri::command]
@@ -690,6 +697,8 @@ fn main() {
     let builder = builder.menu(app_menu);
     builder
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .on_menu_event(on_menu_event)
         .setup(move |app| {
             use tauri::Emitter;
@@ -716,7 +725,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![llm::llm_models, llm::llm_download, llm::llm_cancel, llm::llm_stop, llm::llm_delete, llm::llm_generate, llm::llm_search_query, rpc, request_trace, request_timings, watch_repo, unwatch_repo, reinstall_agent, cleanup_agents, ssh_hosts, load_prefs, save_prefs, open_editor, read_config, ensure_config, write_config, list_themes, sublime_user_dir, import_sublime, agent_info, set_menu, askpass_answer, cli_take, install_cli, uninstall_cli, open_licenses])
+        .invoke_handler(tauri::generate_handler![llm::llm_models, llm::llm_download, llm::llm_cancel, llm::llm_stop, llm::llm_delete, llm::llm_generate, llm::llm_search_query, rpc, request_trace, request_timings, watch_repo, unwatch_repo, reinstall_agent, cleanup_agents, ssh_hosts, load_prefs, save_prefs, open_editor, read_config, ensure_config, write_config, list_themes, sublime_user_dir, import_sublime, agent_info, set_menu, askpass_answer, cli_take, install_cli, uninstall_cli, open_licenses, update_installable])
         .run(tauri::generate_context!())
         .expect("error while running commit.kiwi");
 }

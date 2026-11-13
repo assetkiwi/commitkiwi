@@ -53,11 +53,17 @@ jobs:
 
       - name: Build, bundle licences, verify the signature
         run: scripts/package-macos.sh
+        env: # signs the in-app update bundle (.app.tar.gz + .sig)
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: macos
-          path: target/release/bundle/dmg/*.dmg
+          path: |
+            target/release/bundle/dmg/*.dmg
+            target/release/bundle/macos/*.app.tar.gz
+            target/release/bundle/macos/*.app.tar.gz.sig
           if-no-files-found: error
 
   linux:
@@ -99,12 +105,16 @@ jobs:
 
       - name: Build AppImage, .deb and .rpm, check the bundled licences and agents
         run: scripts/package-linux.sh
+        env: # signs the AppImage for in-app updates (.AppImage.sig)
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: linux-${{ matrix.arch }}
           path: |
             target/release/bundle/appimage/*.AppImage
+            target/release/bundle/appimage/*.AppImage.sig
             target/release/bundle/deb/*.deb
             target/release/bundle/rpm/*.rpm
           if-no-files-found: error
@@ -127,13 +137,20 @@ jobs:
       - name: Collect release files and checksums
         run: |
           mkdir release
-          find built -type f \( -name '*.dmg' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \) -exec cp {} release/ \;
+          find built -type f \( -name '*.dmg' -o -name '*.AppImage' -o -name '*.AppImage.sig' -o -name '*.deb' -o -name '*.rpm' \) -exec cp {} release/ \;
+          # the macOS update bundle is named commit.kiwi.app.tar.gz: give it the version and arch like the rest
+          # (artifacts keep paths below the common folder: built/macos/macos/...)
+          for f in $(find built/macos -type f \( -name '*.app.tar.gz' -o -name '*.app.tar.gz.sig' \)); do
+            cp "$f" "release/commit.kiwi_${GITHUB_REF_NAME#v}_aarch64.app.tar.gz${f##*.app.tar.gz}"
+          done
+          scripts/updater-manifest.sh release "$GITHUB_REF_NAME" "${{ github.repository }}"
           scripts/release-checksums.sh release
 
       - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
           subject-path: |
             release/*.dmg
+            release/*.app.tar.gz
             release/*.AppImage
             release/*.deb
             release/*.rpm

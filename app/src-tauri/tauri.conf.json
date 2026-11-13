@@ -36,6 +36,13 @@
       "../../LICENSE-MIT": "LICENSE-MIT",
       "../../LICENSE-APACHE": "LICENSE-APACHE"
     },
-    "macOS": { "signingIdentity": "-", "minimumSystemVersion": "13.0" }
+    "macOS": { "signingIdentity": "-", "minimumSystemVersion": "13.0" },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDYwQTM3MDJENzk5NzYzNjgKUldSb1k1ZDVMWENqWUZqd1J1bm4ra1lRUldrWjVPaC9xL015eU9oYUJtQnAxbndtZEF6U1VwKzEK",
+      "endpoints": ["https://github.com/assetkiwi/commitkiwi/releases/latest/download/latest.json"]
+    }
   }
 }

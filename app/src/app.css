@@ -656,3 +656,4 @@ span.fh { cursor: default; } span.fh:hover { background: none; }
 .mt-arrow.x { font-size: 13px; } .mt-arrow.x:hover:not(:disabled) { background: var(--del-fg); }
 .mt-link.ignored { fill: none; stroke-dasharray: 3 3; }
 .mt-ok { color: var(--add-fg); font-weight: 600; }
+.banner.update { justify-content: flex-start; gap: 8px; } .banner.update .t { flex: 1; font-weight: 600; }

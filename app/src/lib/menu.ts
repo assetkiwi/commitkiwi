@@ -132,6 +132,7 @@ export const MAIN_MENU: MenuDef[] = [
     { caption: "Minimize", command: "native:minimize" }, { caption: "Zoom", command: "native:maximize" },
   ] },
   { caption: "Help", id: "help", children: [
+    { caption: "Check for Updates…", command: "check_for_updates" },
     { caption: "About commit.kiwi & Licenses…", command: "show_about" },
   ] },
 ];

@@ -282,6 +282,7 @@
             <p class="hint">Never offered for deletion; comma-separated, <code>*</code> matches anything (<code>release/*</code>).</p>
           </div>
           <label class="pf ck"><input type="checkbox" checked={app.prefs.confirm_destructive} disabled={locked("confirm_destructive")} onchange={(e) => setPrefs({ confirm_destructive: e.currentTarget.checked })} /> Confirm destructive operations <span class="hint">(discard, hard reset, force push, drop/delete)</span> {@render fromFile("confirm_destructive")}</label>
+          <label class="pf ck"><input type="checkbox" checked={app.prefs.update_check} disabled={locked("update_check")} onchange={(e) => setPrefs({ update_check: e.currentTarget.checked })} /> Check for updates at startup {@render fromFile("update_check")}</label>
         {:else if page.id === "remote"}
           <div class="pf-group">
             <h3>SSH hosts <span class="hint">(from ~/.ssh/config)</span></h3>

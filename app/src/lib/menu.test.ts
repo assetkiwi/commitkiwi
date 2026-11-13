@@ -68,7 +68,7 @@ test("menu: Go lists repository tabs 1-9 with their Cmd+N keys, and moving the t
   assert.ok(find(nodes, "Repository Dashboard"));
 });
 
-test("menu: Help holds About commit.kiwi & Licenses…", () => {
+test("menu: Help holds Check for Updates and About commit.kiwi & Licenses…", () => {
   const help = MAIN_MENU.find((m) => m.id === "help")!;
-  assert.deepEqual(help.children!.map((c) => [c.caption, c.command]), [["About commit.kiwi & Licenses…", "show_about"]]);
+  assert.deepEqual(help.children!.map((c) => [c.caption, c.command]), [["Check for Updates…", "check_for_updates"], ["About commit.kiwi & Licenses…", "show_about"]]);
 });

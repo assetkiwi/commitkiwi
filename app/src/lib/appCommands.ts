@@ -10,6 +10,7 @@ import { DEFAULT_PALETTE, paletteItems } from "./palette";
 import { COMMANDS_FILE, SETTINGS_FILE, loadUserConfig, userCommands } from "./userConfig";
 import { BUILTIN_THEMES, app, applyTheme, closeTab, cycleTab, getPreference, hostOf, moveTab, openRepo, restoreTab, selectTab, setActive, setAlias, setDiff, setPreference, setTheme, settingsExample, toggleTheme, type Tab, type Theme } from "./state.svelte";
 import { closePreferences, hideOverlay, showAddRepos, showOverlay, showPreferences, ui, type OverlayItem } from "./ui.svelte";
+import { checkForUpdates } from "./updater.svelte";
 
 const fail = (e: unknown) => { app.notice = String(e); };
 
@@ -323,6 +324,7 @@ export function registerAppCommands(): () => void {
     registerCommand("install_command_line_tool", { caption: "Install Command Line Tool (commitkiwi)…", run: () => installCommandLineTool() }),
     registerCommand("uninstall_command_line_tool", { caption: "Uninstall Command Line Tool (commitkiwi)", run: async () => { app.notice = await api.uninstallCli(); } }),
     registerCommand("show_about", { caption: "Help: About commit.kiwi & Licenses…", run: showAbout }),
+    registerCommand("check_for_updates", { caption: "Help: Check for Updates…", run: () => checkForUpdates(true) }),
     registerCommand("edit_key_bindings", { caption: "Preferences: Edit keymap.json…", run: () => editConfig(KEYMAP_FILE) }),
   ];
   return () => offs.forEach((off) => off());
