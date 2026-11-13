@@ -110,6 +110,42 @@ export function takeLines(c: Chunk, take: "ours" | "theirs" | "both"): string {
   return take === "ours" ? c.ours.join("") : take === "theirs" ? c.theirs.join("") : end(c.ours) + c.theirs.join("");
 }
 
+/** One side of a hunk (JetBrains' model): `none` = this side did not change it; `pending` = not decided yet;
+ *  `applied` = its change is in Merged; `ignored` = rejected. */
+export type SideState = "none" | "pending" | "applied" | "ignored";
+export interface Sides { ours: SideState; theirs: SideState }
+
+/** How a hunk starts: one-sided and identical changes applied, conflicts pending. */
+export function initialSides(c: Chunk): Sides {
+  const changed = (s: "ours" | "theirs") => !same(c[s], c.base);
+  if (c.kind === "conflict") return { ours: "pending", theirs: "pending" };
+  return { ours: changed("ours") ? "applied" : "none", theirs: changed("theirs") ? "applied" : "none" };
+}
+
+/** Merged's text for a hunk given its sides: the applied change(s) on top of base; an undecided conflict is the
+ *  placeholder. */
+export function chunkText(c: Chunk, s: Sides): string {
+  const a = s.ours === "applied", b = s.theirs === "applied";
+  if (a && b) return same(c.ours, c.theirs) ? c.ours.join("") : takeLines(c, "both");
+  if (a) return c.ours.join("");
+  if (b) return c.theirs.join("");
+  if (c.kind === "conflict" && (s.ours === "pending" || s.theirs === "pending")) return PLACEHOLDER;
+  return c.base.join("");
+}
+
+/** Text tokens for the word-level merge: words (dots included: a version or
+ *  a.b.c path is one word), runs of spaces, line breaks, single punctuation marks. */
+const tokens = (ls: string[]) => ls.join("").match(/\n|[^\S\n]+|[\w.]+|[^\w\s]/g) ?? [];
+
+/** "Resolve simple conflicts": a conflict whose two changes touch different words merges word by word; null when
+ *  they overlap (a real conflict). */
+export function resolveSimple(c: Chunk): string | null {
+  if (c.kind !== "conflict") return null;
+  const parts = diff3(tokens(c.base), tokens(c.ours), tokens(c.theirs));
+  if (parts.some((p) => p.kind === "conflict")) return null;
+  return parts.map((p) => autoLines(p)!.join("")).join("");
+}
+
 /** The file to save: every still-unresolved conflict (`open`: chunk indexes) written back as git conflict markers. */
 export function withMarkers(text: string, chunks: Chunk[], bounds: number[], open: number[]): string {
   const end = (ls: string[]) => { const s = ls.join(""); return s && !s.endsWith("\n") ? s + "\n" : s; };

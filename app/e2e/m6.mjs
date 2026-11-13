@@ -54,7 +54,16 @@ assert.ok(text.includes('"ours-only": true') && text.includes('"theirs-only": tr
 assert.equal(await page.locator(".mt-mark").count(), 2);
 assert.equal(await tool.getByRole("tab", { name: "Merged (2)" }).count(), 1);
 assert.equal(await tool.locator(".mt-strip").first().locator("polygon").count(), 5, "a connector per changed hunk");
-assert.equal(await tool.locator(".mt-arrow").count(), 10);
+// conflicts: ▶/◀ and × on both sides (4 each); auto-applied: × on each changed side (ours-only, theirs-only, both x2)
+assert.equal(await tool.locator(".mt-arrow").count(), 12);
+assert.equal(await tool.getByText("All changes processed").count(), 0);
+// × on an auto-applied change undoes it (base text again, ▶ to re-apply); Apply ▾ puts it back
+await tool.getByRole("button", { name: "Ignore ours for hunk 3" }).click();
+assert.ok(!(await mergedText()).includes('"ours-only": true'));
+await tool.getByRole("button", { name: "Take ours for hunk 3" }).waitFor();
+await tool.getByRole("button", { name: "Apply", exact: true }).click();
+await entry("Apply Non-Conflicting Changes").click();
+assert.ok((await mergedText()).includes('"ours-only": true'));
 assert.match(await tool.locator(".mt-heads").innerText(), /Commit 00000000 on feature\/d11-upgrade-C[\s\S]*Commit 0000000c on feature\/d11-upgrade-B/);
 if (shots) await page.screenshot({ path: `${shots}/m6-merge.png` });
 // ⌘S here is the merge tool's save (not Stash): unresolved conflicts warn first
@@ -69,6 +78,7 @@ await page.locator(".mt-mark").nth(1).waitFor({ state: "detached" });
 assert.ok((await mergedText()).includes('"hash": "bbb"'));
 await tool.getByRole("button", { name: "Take ours for hunk 5" }).click();
 await page.locator(".mt-mark").waitFor({ state: "detached" });
+await tool.getByText("All changes processed").waitFor();
 assert.equal(await tool.getByRole("tab", { name: "Merged", exact: true }).count(), 1);
 // right-click an arrow: Take Both
 await tool.getByRole("button", { name: "Take ours for hunk 1" }).click({ button: "right" });

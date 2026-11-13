@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { autoLines, buildMerged, diff3, mapLine, matchLines, segments, splitLines, takeLines, withMarkers } from "./merge3.ts";
+import { autoLines, buildMerged, chunkText, diff3, initialSides, mapLine, matchLines, resolveSimple, segments, splitLines, takeLines, withMarkers } from "./merge3.ts";
 
 const L = (s: string) => splitLines(s);
 
@@ -75,4 +75,35 @@ test("mapLine follows chunks between columns", () => {
   assert.equal(mapLine(o, t, 2.5), 1.5);
   assert.equal(mapLine(t, o, 1.5), 2.5);
   assert.equal(mapLine(o, t, 99), 3);
+});
+
+test("hunk sides: one-sided changes start applied, conflicts pending; Merged follows the sides", () => {
+  const [, ours, , conflict, , theirs] = diff3(L("1\n2\n3\n4\n5\n6\n7\n"), L("1\nO2\n3\n4\nX5\n6\n7\n"), L("1\n2\n3\nT4\nX5\n6\nT7\n"));
+  assert.deepEqual(initialSides(ours), { ours: "applied", theirs: "none" });
+  assert.deepEqual(initialSides(theirs), { ours: "none", theirs: "applied" });
+  assert.deepEqual(initialSides(conflict), { ours: "pending", theirs: "pending" });
+  assert.deepEqual(initialSides(diff3(L("a\n"), L("b\n"), L("b\n"))[0]), { ours: "applied", theirs: "applied" });
+  // the starting text matches buildMerged
+  for (const c of [ours, conflict, theirs]) assert.equal(chunkText(c, initialSides(c)), autoLines(c)?.join("") ?? "\n");
+  assert.equal(chunkText(ours, { ours: "ignored", theirs: "none" }), "2\n", "× on an auto-applied change: back to base");
+  assert.equal(chunkText(conflict, { ours: "applied", theirs: "pending" }), "4\nX5\n");
+  assert.equal(chunkText(conflict, { ours: "applied", theirs: "applied" }), "4\nX5\nT4\nX5\n");
+  assert.equal(chunkText(conflict, { ours: "ignored", theirs: "pending" }), "\n", "still undecided");
+  assert.equal(chunkText(conflict, { ours: "ignored", theirs: "ignored" }), "4\n5\n");
+  assert.equal(chunkText(conflict, { ours: "ignored", theirs: "applied" }), "T4\nX5\n");
+});
+
+test("resolveSimple merges changes to different words of the same lines, not overlapping ones", () => {
+  const c = diff3(L("const a = 1, b = 2;\n"), L("const a = 10, b = 2;\n"), L("const a = 1, b = 20;\n"))[0];
+  assert.equal(c.kind, "conflict");
+  assert.equal(resolveSimple(c), "const a = 10, b = 20;\n");
+  // adjacent lines changed by each side
+  const d = diff3(L("x\na\nb\ny\n"), L("x\nA\nb\ny\n"), L("x\na\nB\ny\n")).find((k) => k.kind === "conflict")!;
+  assert.equal(resolveSimple(d), "A\nB\n");
+  // the same word changed differently: a real conflict
+  assert.equal(resolveSimple(diff3(L("v = 1;\n"), L("v = 2;\n"), L("v = 3;\n"))[0]), null);
+  assert.equal(resolveSimple(diff3(L("\"version\": \"1.0\",\n"), L("\"version\": \"1.1\",\n"), L("\"version\": \"2.0\",\n"))[0]), null, "1.1 vs 2.0 is not 2.1");
+  // add/add with different text
+  assert.equal(resolveSimple(diff3([], L("x\n"), L("y\n"))[0]), null);
+  assert.equal(resolveSimple(diff3(L("a\n"), L("b\n"), L("a\n"))[0]), null, "not a conflict");
 });

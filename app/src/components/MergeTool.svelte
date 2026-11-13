@@ -1,7 +1,9 @@
 <script lang="ts">
   // The merge tool: ours | Merged (editable, CM6; or Base) | theirs, connector lines between the
-  // columns, ▶ / ◀ per hunk to take a side (right-click: Take Both), CONFLICT on every unresolved hunk,
-  // Prev/Next Conflict, Cancel, Save and Stage ▾. Binary, symlink, submodule, mode and delete conflicts get a
+  // columns. Each side of a hunk is pending, applied or ignored (JetBrains' model): ▶ / ◀ apply it, × ignores it
+  // (right-click: Take Left/Right/Both); non-conflicting changes start applied and stay highlighted (× undoes one).
+  // CONFLICT on every unresolved hunk, Resolve Simple (word-level merge), Apply ▾, Prev/Next Conflict, Cancel,
+  // Save and Stage ▾. Binary, symlink, submodule, mode and delete conflicts get a
   // whole-file choice instead. Pure merge logic: lib/merge3.ts.
   import { onDestroy, onMount, tick } from "svelte";
   import { EditorState, StateEffect, StateField, type Range } from "@codemirror/state";
@@ -13,7 +15,7 @@
   import { tabScope } from "../lib/tabScope";
   import { openInEditor, type Tab } from "../lib/state.svelte";
   import { showMenu } from "../lib/ui.svelte";
-  import { PLACEHOLDER, buildMerged, diff3, mapLine, segments, splitLines, takeLines, withMarkers, type Chunk } from "../lib/merge3";
+  import { PLACEHOLDER, buildMerged, chunkText, diff3, initialSides, mapLine, resolveSimple, segments, splitLines, withMarkers, type Chunk, type SideState, type Sides } from "../lib/merge3";
   import type { ConflictFile, ConflictSide } from "../lib/types";
 
   let { tab, path, onclose }: { tab: Tab; path: string; onclose: (changed: boolean) => void } = $props();
@@ -24,10 +26,13 @@
   let showBase = $state(false);
   let confirm = $state<null | "cancel" | "save" | "stage">(null);
   let openCount = $state(0); // unresolved conflicts
+  let simpleCount = $state(0); // unresolved conflicts Resolve Simple can merge
+  let built = $state(false); // the columns exist (counts are real)
   let dirty = $state(false);
   let chunks: Chunk[] = [];
+  let simple: (string | null)[] = []; // each conflict's word-level merge (null: a real conflict)
   let links = $state.raw<{ left: Link[]; right: Link[] }>({ left: [], right: [] });
-  interface Link { c: number; kind: Chunk["kind"]; open: boolean; a: [number, number]; b: [number, number] }
+  interface Link { c: number; kind: Chunk["kind"]; open: boolean; state: SideState; a: [number, number]; b: [number, number] }
 
   const repo = $derived(tab.path);
   const short = (o: string | null) => (o ? o.slice(0, 8) : "?");
@@ -55,11 +60,11 @@
   let ours: EditorView | null = null, theirs: EditorView | null = null, merged: EditorView | null = null, base: EditorView | null = null;
   let initial = "";
 
-  /** Merged's chunk boundaries (`bounds[c]..bounds[c + 1]`) and the hunks a side was taken for */
-  interface Track { bounds: number[]; taken: ReadonlySet<number> }
+  /** Merged's chunk boundaries (`bounds[c]..bounds[c + 1]`) and each hunk's sides */
+  interface Track { bounds: number[]; sides: Sides[] }
   const setTrack = StateEffect.define<Track>();
   const track = StateField.define<Track>({
-    create: () => ({ bounds: [], taken: new Set() }),
+    create: () => ({ bounds: [], sides: [] }),
     update(t, tr) {
       for (const e of tr.effects) if (e.is(setTrack)) return e.value;
       if (!tr.docChanged) return t;
@@ -69,19 +74,22 @@
     },
   });
   const isOpen = (s: EditorState, c: number) => {
-    const t = s.field(track);
-    return chunks[c].kind === "conflict" && !t.taken.has(c) && s.doc.sliceString(t.bounds[c], t.bounds[c + 1]) === PLACEHOLDER;
+    const t = s.field(track), sd = t.sides[c];
+    return chunks[c].kind === "conflict" && sd.ours !== "applied" && sd.theirs !== "applied" && (sd.ours === "pending" || sd.theirs === "pending")
+      && s.doc.sliceString(t.bounds[c], t.bounds[c + 1]) === PLACEHOLDER;
   };
   class ConflictMark extends WidgetType {
     toDOM() { const s = document.createElement("span"); s.className = "mt-mark"; s.textContent = "CONFLICT"; return s; }
     eq() { return true; }
   }
   const mergedDeco = EditorView.decorations.compute([track, "doc"], (s) => {
-    const { bounds } = s.field(track);
+    const { bounds, sides } = s.field(track);
     const out: Range<Decoration>[] = [];
     chunks.forEach((ch, c) => {
       if (ch.kind === "same" || bounds[c] === undefined) return;
       const open = isOpen(s, c);
+      // a change undone with × is plain base text again
+      if (!open && ch.kind !== "conflict" && sides[c].ours !== "applied" && sides[c].theirs !== "applied") return;
       for (let p = bounds[c]; p < bounds[c + 1]; ) {
         const line = s.doc.lineAt(p);
         out.push(Decoration.line({ class: open ? "mt-open" : ch.kind === "conflict" ? "mt-done" : "mt-auto" }).range(line.from));
@@ -150,11 +158,12 @@
       const mid = showBase ? base : merged;
       if (!ours || !theirs || !mid || !area) return;
       const [so, sm, st] = [segs(ours), segs(mid), segs(theirs)];
-      const link = (av: EditorView, as: [number, number][], bv: EditorView, bs: [number, number][]) => chunks.flatMap((ch, c): Link[] => ch.kind === "same" ? [] : [{
-        c, kind: ch.kind, open: !showBase && isOpen(merged!.state, c),
+      const sides = merged!.state.field(track).sides;
+      const link = (av: EditorView, as: [number, number][], bv: EditorView, bs: [number, number][], side: "ours" | "theirs") => chunks.flatMap((ch, c): Link[] => ch.kind === "same" ? [] : [{
+        c, kind: ch.kind, open: !showBase && isOpen(merged!.state, c), state: sides[c][side],
         a: [yOf(av, as[c][0]), yOf(av, as[c][1])], b: [yOf(bv, bs[c][0]), yOf(bv, bs[c][1])],
       }]);
-      links = { left: link(ours, so, mid, sm), right: link(mid, sm, theirs, st) };
+      links = { left: link(ours, so, mid, sm, "ours"), right: link(mid, sm, theirs, st, "theirs") };
     });
   }
   function onScroll(v: EditorView) {
@@ -164,6 +173,7 @@
 
   function build(d: ConflictFile) {
     chunks = diff3(splitLines(d.base?.blob.text ?? ""), splitLines(d.ours!.blob.text ?? ""), splitLines(d.theirs!.blob.text ?? ""));
+    simple = chunks.map(resolveSimple);
     const m = buildMerged(chunks);
     initial = m.text;
     ours = sideView(oursEl!, d.ours!.blob.text ?? "", "ours", "Ours");
@@ -178,34 +188,56 @@
           EditorView.updateListener.of((u) => { if (u.docChanged || u.transactions.some((t) => t.effects.length)) { refreshCounts(); redraw(); } })],
       }),
     });
-    merged.dispatch({ effects: setTrack.of({ bounds: m.bounds, taken: new Set() }) });
+    merged.dispatch({ effects: setTrack.of({ bounds: m.bounds, sides: chunks.map(initialSides) }) });
     for (const v of [ours, theirs, base, merged]) {
       v.scrollDOM.addEventListener("scroll", () => onScroll(v));
       for (const ev of ["wheel", "mousedown", "keydown", "touchstart"]) v.dom.addEventListener(ev, () => (driver = v), { passive: true });
     }
     refreshCounts();
+    built = true;
     redraw();
     // start at the first conflict
     void tick().then(() => step(1, -1));
   }
   function refreshCounts() {
     if (!merged) return;
-    openCount = chunks.filter((_, c) => isOpen(merged!.state, c)).length;
+    const open = chunks.map((_, c) => c).filter((c) => isOpen(merged!.state, c));
+    openCount = open.length;
+    simpleCount = open.filter((c) => simple[c] !== null).length;
     dirty = merged.state.doc.toString() !== initial;
   }
 
   // ---- actions
+  /** Set hunks' sides in one undoable edit; each hunk's Merged text becomes `text` (default: what its sides give). */
+  function decide(updates: Map<number, { sides: Sides; text?: string }>) {
+    if (!merged || !updates.size) return;
+    const t = merged.state.field(track);
+    const sides = [...t.sides], bounds = [...t.bounds], changes = [];
+    let delta = 0;
+    for (let c = 0; c < chunks.length; c++) {
+      bounds[c] += delta;
+      const u = updates.get(c);
+      if (!u) continue;
+      const insert = u.text ?? chunkText(chunks[c], u.sides);
+      changes.push({ from: t.bounds[c], to: t.bounds[c + 1], insert });
+      sides[c] = u.sides;
+      delta += insert.length - (t.bounds[c + 1] - t.bounds[c]);
+    }
+    bounds[chunks.length] += delta;
+    merged.dispatch({ changes, effects: setTrack.of({ bounds, sides }) });
+    dirty = true;
+  }
+  const sidesOf = (c: number) => merged!.state.field(track).sides[c];
+  /** ▶ / ◀ (apply) and × (ignore) on one side of a hunk */
+  function mark(c: number, side: "ours" | "theirs", state: "applied" | "ignored") {
+    if (!merged || sidesOf(c)[side] === "none") return;
+    decide(new Map([[c, { sides: { ...sidesOf(c), [side]: state } }]]));
+  }
+  /** Take Left / Right / Both: one side (the other ignored), or both */
   function take(c: number, which: "ours" | "theirs" | "both") {
     if (!merged) return;
-    const t = merged.state.field(track);
-    const [from, to] = [t.bounds[c], t.bounds[c + 1]];
-    const insert = takeLines(chunks[c], which);
-    const delta = insert.length - (to - from);
-    merged.dispatch({
-      changes: { from, to, insert },
-      effects: setTrack.of({ bounds: t.bounds.map((p, i) => (i <= c ? p : p + delta)), taken: new Set([...t.taken, c]) }),
-    });
-    dirty = true;
+    const s = sidesOf(c), set = (x: SideState, on: boolean): SideState => (x === "none" ? "none" : on ? "applied" : "ignored");
+    decide(new Map([[c, { sides: { ours: set(s.ours, which !== "theirs"), theirs: set(s.theirs, which !== "ours") } }]]));
   }
   function takeMenu(e: MouseEvent, c: number) {
     e.preventDefault();
@@ -213,6 +245,36 @@
       { label: "Take Left", run: () => take(c, "ours") },
       { label: "Take Right", run: () => take(c, "theirs") },
       { label: "Take Both (Left First)", run: () => take(c, "both") },
+      ...(simple[c] !== null && isOpen(merged!.state, c) ? [{ label: "Resolve Simple Conflict", run: () => resolveSimpleAll([c]) }] : []),
+    ]);
+  }
+  /** Apply Non-Conflicting Changes: every one-sided hunk's change (of `which` side) back in, as on opening */
+  function applyNonConflicting(which: "ours" | "theirs" | "all") {
+    if (!merged) return;
+    const ups = new Map<number, { sides: Sides }>();
+    chunks.forEach((ch, c) => {
+      if (ch.kind === "same" || ch.kind === "conflict") return;
+      const s = { ...sidesOf(c) }, init = initialSides(ch);
+      for (const k of ["ours", "theirs"] as const) if ((which === "all" || which === k) && init[k] === "applied") s[k] = "applied";
+      if (s.ours !== sidesOf(c).ours || s.theirs !== sidesOf(c).theirs) ups.set(c, { sides: s });
+    });
+    decide(ups);
+  }
+  /** Resolve Simple Conflicts: open conflicts whose sides changed different words get both changes, merged */
+  function resolveSimpleAll(only?: number[]) {
+    if (!merged) return;
+    const cs = (only ?? chunks.map((_, c) => c)).filter((c) => simple[c] !== null && isOpen(merged!.state, c));
+    decide(new Map(cs.map((c) => [c, { sides: { ours: "applied", theirs: "applied" }, text: simple[c]! }])));
+  }
+  function applyMenu(e: MouseEvent) {
+    showMenu(e.currentTarget as HTMLElement, [
+      { label: "Apply Non-Conflicting Changes", run: () => applyNonConflicting("all") },
+      { label: "Apply Non-Conflicting Changes from Left", run: () => applyNonConflicting("ours") },
+      { label: "Apply Non-Conflicting Changes from Right", run: () => applyNonConflicting("theirs") },
+      { label: `Resolve Simple Conflicts${simpleCount ? ` (${simpleCount})` : ""}`, run: () => resolveSimpleAll() },
+      "-",
+      { label: "Accept Left (whole file)", run: () => void resolveWith(false) },
+      { label: "Accept Right (whole file)", run: () => void resolveWith(true) },
     ]);
   }
   /** the hunk under Merged's cursor, else the next open conflict */
@@ -294,6 +356,8 @@
       registerCommand("use_right_hunk", { run: () => { const c = current(); if (c >= 0) take(c, "theirs"); } }),
       registerCommand("take_ours", { run: () => { const c = current(); if (c >= 0) take(c, "ours"); } }),
       registerCommand("take_theirs", { run: () => { const c = current(); if (c >= 0) take(c, "theirs"); } }),
+      registerCommand("apply_non_conflicting", { caption: "Merge: Apply Non-Conflicting Changes", run: () => applyNonConflicting("all") }),
+      registerCommand("resolve_simple_conflicts", { caption: "Merge: Resolve Simple Conflicts", run: () => resolveSimpleAll() }),
       registerCommand("focus_left", { run: () => focusCol(ours) }),
       registerCommand("focus_middle", { run: () => focusCol(showBase ? base : merged) }),
       registerCommand("focus_right", { run: () => focusCol(theirs) }),
@@ -314,11 +378,23 @@
   const W = 34; // connector strip width
 </script>
 
+{#snippet sideButtons(l: Link, side: "ours" | "theirs", top: number)}
+  {#if l.state !== "none"}
+    {@const name = side === "ours" ? "ours" : "theirs"}
+    {#if l.state !== "applied"}<button class="mt-arrow" class:right={side === "theirs"} style:top="{top}px" title="Apply this change from {name} (right-click: more)" aria-label="Take {name} for hunk {l.c}"
+      onclick={() => mark(l.c, side, "applied")} oncontextmenu={(e) => takeMenu(e, l.c)} disabled={showBase}>{side === "ours" ? "▶" : "◀"}</button>{/if}
+    {#if l.state !== "ignored"}<button class="mt-arrow x" style:top="{top + (l.state === "applied" ? 0 : 20)}px" title="Ignore this change from {name}" aria-label="Ignore {name} for hunk {l.c}"
+      onclick={() => mark(l.c, side, "ignored")} oncontextmenu={(e) => takeMenu(e, l.c)} disabled={showBase}>×</button>{/if}
+  {/if}
+{/snippet}
+
 <div class="mtool" aria-label="Merge tool">
   <header class="mt-bar">
     <div class="grp">
       <button class="btn" onclick={() => step(-1)} disabled={!!reason || !data}>Prev Conflict</button>
       <button class="btn" onclick={() => step(1)} disabled={!!reason || !data}>Next Conflict</button>
+      {#if simpleCount}<button class="btn" onclick={() => resolveSimpleAll()} title="Merge conflicts whose sides changed different words">Resolve Simple ({simpleCount})</button>{/if}
+      <button class="btn" aria-label="Apply" onclick={applyMenu} disabled={!!reason || !data}>Apply <svg class="i"><use href="#i-down" /></svg></button>
     </div>
     <div class="grp mid">
       <span class="mt-file mono" title={path}>{path}</span>
@@ -334,6 +410,7 @@
         <button class="btn danger" onclick={() => save(confirm === "stage", true)}>Save anyway</button>
         <button class="btn" onclick={() => (confirm = null)}>Back</button>
       {:else}
+        {#if built && !openCount}<span class="mt-ok" role="status">All changes processed</span>{/if}
         <button class="btn" onclick={() => cancel()}>Cancel</button>
         <span class="split">
           <button class="btn" disabled={busy || !!reason || !data} onclick={() => save(true)}>Save and Stage</button>
@@ -369,16 +446,14 @@
     <div class="mt-cols" bind:this={area}>
       <div class="mt-col" bind:this={oursEl}></div>
       <div class="mt-strip">
-        <svg width={W} height="100%" aria-hidden="true">{#each links.left as l (l.c)}<polygon class="mt-link {l.kind}" class:open={l.open} points={poly(l, W)} />{/each}</svg>
-        {#each links.left as l (l.c)}<button class="mt-arrow" style:top="{l.a[0]}px" title="Take this hunk from ours (right-click: more)" aria-label="Take ours for hunk {l.c}"
-          onclick={() => take(l.c, "ours")} oncontextmenu={(e) => takeMenu(e, l.c)} disabled={showBase}>▶</button>{/each}
+        <svg width={W} height="100%" aria-hidden="true">{#each links.left as l (l.c)}<polygon class="mt-link {l.kind} {l.state}" class:open={l.open} points={poly(l, W)} />{/each}</svg>
+        {#each links.left as l (l.c)}{@render sideButtons(l, "ours", l.a[0])}{/each}
       </div>
       <div class="mt-col" class:gone={showBase} bind:this={mergedEl}></div>
       <div class="mt-col" class:gone={!showBase} bind:this={baseEl}></div>
       <div class="mt-strip">
-        <svg width={W} height="100%" aria-hidden="true">{#each links.right as l (l.c)}<polygon class="mt-link {l.kind}" class:open={l.open} points={poly(l, W)} />{/each}</svg>
-        {#each links.right as l (l.c)}<button class="mt-arrow right" style:top="{l.b[0]}px" title="Take this hunk from theirs (right-click: more)" aria-label="Take theirs for hunk {l.c}"
-          onclick={() => take(l.c, "theirs")} oncontextmenu={(e) => takeMenu(e, l.c)} disabled={showBase}>◀</button>{/each}
+        <svg width={W} height="100%" aria-hidden="true">{#each links.right as l (l.c)}<polygon class="mt-link {l.kind} {l.state}" class:open={l.open} points={poly(l, W)} />{/each}</svg>
+        {#each links.right as l (l.c)}{@render sideButtons(l, "theirs", l.b[0])}{/each}
       </div>
       <div class="mt-col" bind:this={theirsEl}></div>
     </div>
