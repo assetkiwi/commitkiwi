@@ -134,6 +134,20 @@ assert.equal(await active(), "delta");
 await page.keyboard.press("Meta+3");
 assert.equal(await active(), "gamma");
 
+// ---- Switch Repository to a recent (not open) repo opens it in the current tab, in place
+await page.keyboard.press("Meta+p");
+await page.locator(".overlay li", { hasText: "beta" }).waitFor();
+await page.keyboard.type("beta");
+await page.keyboard.press("Enter");
+await page.locator(".tab.on .tab-main", { hasText: "beta" }).waitFor();
+assert.deepEqual(await names(), ["delta", "alpha", "beta"]);
+// ...and an open one is focused, not replaced
+await page.keyboard.press("Meta+p");
+await page.keyboard.type("delta");
+await page.keyboard.press("Enter");
+await page.locator(".tab.on .tab-main", { hasText: "delta" }).waitFor();
+assert.deepEqual(await names(), ["delta", "alpha", "beta"]);
+
 assert.deepEqual(errors, []);
 await browser.close();
 console.log("tabs e2e ok");

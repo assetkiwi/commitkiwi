@@ -195,8 +195,9 @@ async function loadTab(location: string, path: string, opened?: RepoInfo): Promi
   return { id, location, path: info.root, info, refs, total, rev: 0, dirty: false, alias: app.aliases[id] ?? "", hidden };
 }
 
-/** Open (or focus) a repo. Rejects with the backend's message, shown by the caller. */
-export async function openRepo(location: string, path: string): Promise<void> {
+/** Open (or focus) a repo. `replace`: a tab id to open it in instead of a new tab (Switch Repository).
+ *  Rejects with the backend's message, shown by the caller. */
+export async function openRepo(location: string, path: string, replace?: string): Promise<void> {
   const info = await api.open(location, path).catch((e) => {
     if (isGoneError(e) && app.recent.some((r) => r.location === location && r.path === path)) {
       removeRecent({ location, path });
@@ -206,8 +207,10 @@ export async function openRepo(location: string, path: string): Promise<void> {
   });
   const id = tabId(location, info.root);
   if (!app.tabs.some((t) => t.id === id)) {
-    app.tabs.push(await loadTab(location, info.root, info)); // reuse the Open answer: one round trip less on a remote
-    watchTab(app.tabs[app.tabs.length - 1]);
+    const fresh = await loadTab(location, info.root, info); // reuse the Open answer: one round trip less on a remote
+    const i = app.tabs.findIndex((t) => t.id === replace); // looked up after the await: tabs may have moved
+    if (i >= 0) { retire(app.tabs[i]); app.tabs[i] = fresh; } else app.tabs.push(fresh);
+    watchTab(app.tabs.find((t) => t.id === id)!); // the proxied tab, so `watching` stays reactive
   }
   app.active = id;
   app.recent = touchRecent(app.recent, { location, path: info.root });
@@ -222,14 +225,19 @@ export function addRecentRepos(location: string, paths: string[]): void {
 
 const closed: Recent[] = []; // most recently closed first, for restore_tab
 
+/** A tab leaving (closed, or switched to another repo): restorable, unwatched, its cache dropped. */
+function retire(t: Tab): void {
+  closed.unshift({ location: t.location, path: t.path });
+  closed.length = Math.min(closed.length, 20);
+  void api.unwatchRepo(t.location, t.path).catch(() => {});
+  dropCache(t.id);
+}
+
 export function closeTab(id: string): void {
   const i = app.tabs.findIndex((t) => t.id === id);
   if (i < 0) return;
-  closed.unshift({ location: app.tabs[i].location, path: app.tabs[i].path });
-  closed.length = Math.min(closed.length, 20);
-  void api.unwatchRepo(app.tabs[i].location, app.tabs[i].path).catch(() => {});
+  retire(app.tabs[i]);
   app.tabs.splice(i, 1);
-  dropCache(id);
   if (app.active === id) app.active = app.tabs[Math.min(i, app.tabs.length - 1)]?.id ?? "locations";
   persist();
 }

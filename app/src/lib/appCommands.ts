@@ -111,7 +111,8 @@ function switchRepository(): void {
       hideOverlay();
       const v = item.value as { tab?: string; recent?: { location: string; path: string } };
       if (v.tab) setActive(v.tab);
-      else if (v.recent) openRepo(v.recent.location, v.recent.path).catch(fail);
+      // in the shown repository's tab (Sublime Merge does the same); from the New Tab page or Dashboard: a new tab
+      else if (v.recent) openRepo(v.recent.location, v.recent.path, app.active).catch(fail);
     },
   });
 }
