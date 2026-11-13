@@ -65,6 +65,7 @@
       const args = [tab.location, tab.path, file.path, file.old_path, staged, untracked, conflicted, app.diff.context, app.diff.ignoreWs] as const;
       const p = await diffQueue(() => api.workDiff(...args), () => alive && near && want === k);
       if (k !== want) return;
+      if (p.text === patch && status === "ready") { got = k; return; } // reloaded for an edit that did not touch this file
       patch = p.text;
       rows = parseDiff(p.text);
       binary = isBinaryPatch(p.text);

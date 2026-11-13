@@ -15,8 +15,10 @@
   import WorkDiff from "./WorkDiff.svelte";
 
   const AUTO_FILES = 20; // more changed files than this start collapsed (each open file loads its diff)
-  let { tab, status, onchanged, focus = $bindable(null) }: {
+  let { tab, status, rev = 0, onchanged, focus = $bindable(null) }: {
     tab: Tab; status: Status | null; onchanged: () => Promise<void>;
+    /** bumped when file contents may have changed under an unchanged status: open diffs reload */
+    rev?: number;
     /** the open file tab, `u:<path>` (unstaged or unmerged) or `s:<path>` (staged); null = Summary */
     focus?: string | null;
   } = $props();
@@ -36,10 +38,10 @@
   const letter = (f: WorkFile, isStaged: boolean) =>
     f.kind === "conflicted" ? "!" : f.kind === "untracked" ? "?" : isStaged ? "S" : f.worktree;
 
-  // Reload open diffs whenever the status changes (a poll saw an edit, or we staged something).
+  // Reload open diffs whenever the status changes or files were edited (a file event, a poll, we staged something).
   let lastKey = "";
   $effect(() => {
-    const key = JSON.stringify(files);
+    const key = JSON.stringify([files, rev]);
     if (key !== lastKey) { lastKey = key; diffVersion++; }
   });
   $effect(() => { if (focus) closed.delete(focus); });

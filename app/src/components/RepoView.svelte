@@ -84,11 +84,18 @@
     : view === "work" ? workFocus
     : view === "commit" ? commitFile && `c:${commitFile}` : null);
 
-  async function refreshWork() {
+  let workRev = $state(0); // bumped when file contents may have changed: open diffs reload even if the status is the same
+  let statusAsked = 0, statusShown = 0;
+  /** `edited`: files may have changed without changing the status (an agent editing an already-modified file) */
+  async function refreshWork(edited = false) {
+    const n = ++statusAsked;
     try {
       const s = await api.status(tab.location, tab.path);
+      if (n < statusShown) return; // a newer status already landed: this one is stale
+      statusShown = n;
       const key = JSON.stringify(s);
       if (key !== workKey) { workKey = key; work = s; } // identical status: no re-render
+      if (edited) workRev++;
       setDirty(tab, s.files.length > 0);
     } catch { /* repo busy or briefly unavailable: keep showing the last status */ }
   }
@@ -100,7 +107,7 @@
     } catch { /* briefly unavailable: the next change tries again */ }
   }
   // File events (M8) drive refreshes; the window regaining focus refreshes too.
-  $effect(() => onTabChange(tab.id, (c) => { if (c.work) void refreshWork(); if (c.refs) void refreshRefs(); }));
+  $effect(() => onTabChange(tab.id, (c) => { if (c.work) void refreshWork(true); if (c.refs) void refreshRefs(); }));
   // The first status as soon as the view exists (with file events nothing else would ask: the old "Checking…"
   // that never ended after a tab switch), and again when a tab without file events is shown: in the background,
   // the last status stays on screen meanwhile.
@@ -114,10 +121,10 @@
       while (!stop) {
         await new Promise((r) => setTimeout(r, Math.max(3000, (performance.now() - t) * 4)));
         t = performance.now();
-        if (!stop && !document.hidden && active && tab.watching !== null) await refreshWork();
+        if (!stop && !document.hidden && active && tab.watching !== null) await refreshWork(true);
       }
     })();
-    const onFocus = () => { if (active) void refreshWork(); };
+    const onFocus = () => { if (active) void refreshWork(true); };
     window.addEventListener("focus", onFocus);
     return () => { stop = true; window.removeEventListener("focus", onFocus); };
   });
@@ -802,7 +809,7 @@
   $effect(() => {
     if (!active) return;
     const offs = [
-      registerCommand("refresh", { caption: "View: Refresh", run: async () => { await Promise.all([refreshWork(), reloadTab(tab)]); } }),
+      registerCommand("refresh", { caption: "View: Refresh", run: async () => { await Promise.all([refreshWork(true), reloadTab(tab)]); } }),
       registerCommand("navigate_to_head", { run: () => { if (tab.info.oid) return jumpTo(tab.info.oid); } }),
       registerCommand("navigate_back", { caption: "Go: Back", run: () => navigate(-1) }),
       registerCommand("navigate_forward", { caption: "Go: Forward", run: () => navigate(1) }),
@@ -1123,7 +1130,7 @@
           <div class="empty"><div><h2>Select a file</h2><p class="hint">Tree of {treeOid ? treeOid.slice(0, 8) : "—"}{selected ? "" : " (HEAD)"}</p></div></div>
         {/if}
       {:else if view === "work"}
-        <WorkingDir {tab} status={work} onchanged={refreshWork} bind:focus={workFocus} />
+        <WorkingDir {tab} status={work} rev={workRev} onchanged={() => refreshWork(true)} bind:focus={workFocus} />
       {:else if view === "stash" && stashSel}
         {#key stashSel.oid}
           <CommitDetail {tab} stash={stashSel.name} commit={{ oid: stashSel.oid, parents: [], author: "", email: "", time: 0, subject: stashSel.message, files: null, labels: [] }}

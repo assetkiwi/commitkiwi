@@ -60,8 +60,15 @@ await page.waitForTimeout(500);
 const s0 = await mock("__mockStatusCalls");
 await page.waitForTimeout(3600);
 assert.equal(await mock("__mockStatusCalls"), s0, "no status polling while the watcher is active");
+const shown = page.locator(".tabview:not(.off)");
+await shown.locator(".workrow").click();
+await shown.locator(".details.work .file .diff").first().waitFor();
+await page.waitForTimeout(800); // the other bodies finish loading
+const w0 = await page.evaluate(() => globalThis.__mockDiffCalls.filter((c) => c.work).length);
 await page.evaluate(() => globalThis.__mockChange("/work/demo-repo", { work: true }));
 await page.waitForFunction((n) => globalThis.__mockStatusCalls > n, s0, { timeout: 1000 });
+// the status did not change, but a file may have (an agent editing a modified file): the open diffs reload
+await page.waitForFunction((n) => globalThis.__mockDiffCalls.filter((c) => c.work).length > n, w0, { timeout: 1000 });
 // a refs change re-reads HEAD/refs (Open + Refs), and reloads only if they differ
 const opens = async () => (await mock("__mockOpens")) ?? 0;
 const o0 = await opens();
