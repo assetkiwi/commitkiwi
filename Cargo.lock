@@ -440,7 +440,7 @@ dependencies = [
 
 [[package]]
 name = "commitkiwi-agent"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "commitkiwi-core",
  "commitkiwi-protocol",
@@ -451,7 +451,7 @@ dependencies = [
 
 [[package]]
 name = "commitkiwi-app"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "commitkiwi-llm",
  "commitkiwi-protocol",
@@ -470,7 +470,7 @@ dependencies = [
 
 [[package]]
 name = "commitkiwi-core"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "base64 0.23.1",
  "commitkiwi-protocol",
@@ -481,7 +481,7 @@ dependencies = [
 
 [[package]]
 name = "commitkiwi-llm"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "futures-util",
  "llama-cpp-2",
@@ -495,7 +495,7 @@ dependencies = [
 
 [[package]]
 name = "commitkiwi-protocol"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "rmp-serde",
  "serde",
@@ -504,7 +504,7 @@ dependencies = [
 
 [[package]]
 name = "commitkiwi-runner"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "commitkiwi-core",
  "commitkiwi-protocol",
