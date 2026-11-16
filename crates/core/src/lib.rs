@@ -21,6 +21,8 @@ const MAX_PAGE: u32 = 2000;
 const MAX_STATS: usize = 200;
 const PATCH_LIMIT: usize = 4 << 20;
 const BLOB_LIMIT: usize = 1 << 20;
+/// Merge tool sides: lock files (composer.lock, package-lock.json) run to several MB; CM6 renders only the viewport.
+const MERGE_LIMIT: usize = 32 << 20;
 const IMAGE_LIMIT: usize = 8 << 20;
 const MAX_CONTEXT: u32 = 100;
 const FIELD: char = '\x1f';
@@ -2109,7 +2111,7 @@ fn conflict(repo: &str, path: &str) -> Result<ConflictFile, String> {
             let t = format!("Subproject commit {oid}\n");
             Blob { size: t.len() as u64, text: Some(t), binary: false, truncated: false }
         } else {
-            let (bytes, cut, size) = read_spec(repo, oid, BLOB_LIMIT)?;
+            let (bytes, cut, size) = read_spec(repo, oid, MERGE_LIMIT)?;
             to_blob(bytes, cut, size)
         };
         Ok(Some(ConflictSide { mode: mode.clone(), blob }))
