@@ -64,6 +64,8 @@
       showContextMenu(e, REMOTE_BRANCH, { ...vars, tracked: tab.refs.refs.some((x) => x.kind === "branch" && x.name === local) });
     }
   }
+  /** double-click: check out a branch (a remote one via its local branch, created when missing); tags stay single-click */
+  const checkout = (r: RefItem) => { if (r.kind !== "tag" && !r.head) runCommand("checkout_branch", { branch: fullRef(r.kind, r.name) }); };
   function folderMenu(e: MouseEvent, kind: RefKind, path: string) {
     if (kind === "remote" && tab.refs.remotes.includes(path)) showContextMenu(e, REMOTE, { remote: path });
     else if (kind !== "tag") showContextMenu(e, kind === "branch" ? BRANCH_FOLDER : REMOTE_BRANCH_FOLDER, { branch: path });
@@ -84,7 +86,7 @@
     {#if n.item}
       {@const r = n.item}
       <li class:head={r.head} class:hid={hidden.has(fullRef(r.kind, r.name))} oncontextmenu={(e) => refMenu(e, r)}>
-        <button class="go" style:padding-left="{14 + depth * 14}px" title="Go to {r.name}" onclick={() => onjump(r.oid)}><span class="t">{n.label}</span></button>
+        <button class="go" style:padding-left="{14 + depth * 14}px" title="Go to {r.name}" onclick={() => onjump(r.oid)} ondblclick={() => checkout(r)}><span class="t">{n.label}</span></button>
         <button class="eye" aria-label="{hidden.has(fullRef(r.kind, r.name)) ? 'Show' : 'Hide'} {r.name}" title={eyeTitle(r)} onclick={(e) => eye(e, r)}>
           <svg class="i"><use href={hidden.has(fullRef(r.kind, r.name)) ? "#i-eye-off" : "#i-eye"} /></svg>
         </button>
