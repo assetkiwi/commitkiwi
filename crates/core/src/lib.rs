@@ -27,8 +27,8 @@ const IMAGE_LIMIT: usize = 8 << 20;
 const MAX_CONTEXT: u32 = 100;
 const FIELD: char = '\x1f';
 const RECORD: char = '\x1e';
-/// Every ref and HEAD, except the stash (its hidden WIP/index commits), notes and the refs the user hid: what the commit list shows.
-fn revs(hidden: &[String]) -> Result<Vec<String>, String> {
+/// Every ref and HEAD, every stash entry (WIP + index commits), minus notes and the refs the user hid: what the commit list shows.
+fn revs(repo: &str, hidden: &[String]) -> Result<Vec<String>, String> {
     let mut v = vec!["--exclude=refs/stash".to_string(), "--exclude=refs/notes/*".to_string()];
     for r in hidden {
         // ref names can't contain glob characters, so a valid one only ever excludes itself
@@ -39,6 +39,8 @@ fn revs(hidden: &[String]) -> Result<Vec<String>, String> {
     }
     // not `--all`: that also keeps every other worktree's HEAD, so a branch checked out there could never be hidden
     v.extend(["--glob=refs/*".into(), "--ignore-missing".into(), "HEAD".into()]);
+    // older entries are only in the stash reflog; `stash list` fails without a stash ref: none then
+    v.extend(git(repo, &["stash", "list", "--format=%H"]).unwrap_or_default().lines().map(String::from));
     Ok(v)
 }
 
@@ -182,11 +184,11 @@ fn run(req: Req) -> Result<Resp, String> {
         Req::Hello => Resp::Hello { proto: PROTO_VERSION },
         Req::Open { path } => Resp::Repo(open(&path)?),
         Req::Refs { repo } => Resp::Refs(refs(&repo)?),
-        Req::Count { repo, hidden } => Resp::Count(count(&repo, &revs(&hidden)?)?),
-        Req::Log { repo, skip, limit, hidden } => Resp::Log(log(&repo, skip, limit.min(MAX_PAGE), &revs(&hidden)?)?),
+        Req::Count { repo, hidden } => Resp::Count(count(&repo, &revs(&repo, &hidden)?)?),
+        Req::Log { repo, skip, limit, hidden } => Resp::Log(log(&repo, skip, limit.min(MAX_PAGE), &revs(&repo, &hidden)?)?),
         Req::Stats { repo, oids } => Resp::Stats(stats(&repo, &oids)?),
-        Req::Graph { repo, hidden } => Resp::Graph(graph(&repo, &revs(&hidden)?)?),
-        Req::Locate { repo, oid, hidden } => Resp::Locate(locate(&repo, &oid, &revs(&hidden)?)?),
+        Req::Graph { repo, hidden } => Resp::Graph(graph(&repo, &revs(&repo, &hidden)?)?),
+        Req::Locate { repo, oid, hidden } => Resp::Locate(locate(&repo, &oid, &revs(&repo, &hidden)?)?),
         Req::Show { repo, oid, from } => Resp::Show(show(&repo, &oid, from.as_deref())?),
         Req::Diff { repo, oid, path, old_path, context, ignore_ws, from } => {
             Resp::Diff(diff(&repo, &oid, &path, old_path.as_deref(), (context, ignore_ws), from.as_deref())?)
@@ -241,7 +243,7 @@ fn run(req: Req) -> Result<Resp, String> {
         }
         Req::SyncSubmodules { repo, path } => done(git_out(&repo, &with_submodule(&repo, vec!["submodule", "sync", "--recursive"], path.as_deref())?).map(|_| ()))?,
         Req::ScanRepos { root, depth } => Resp::Scan(scan_repos(&root, depth)?),
-        Req::Search { repo, query, hidden, limit } => Resp::Search(search(&repo, &query, limit, &revs(&hidden)?)?),
+        Req::Search { repo, query, hidden, limit } => Resp::Search(search(&repo, &query, limit, &revs(&repo, &hidden)?)?),
         Req::CreateBranch { repo, name, from, checkout } => done(create_branch(&repo, &name, from.as_deref(), checkout))?,
         Req::RenameBranch { repo, branch, name } => {
             let (old, new) = (local_branch(&repo, &branch)?, ref_name(&repo, "refs/heads/", &name)?);

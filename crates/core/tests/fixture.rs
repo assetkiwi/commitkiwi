@@ -66,8 +66,6 @@ fn fixture_repo() {
     sh(&d, &["fetch", "-q", "origin"]);
     sh(&d, &["branch", "-q", "-u", "origin/main"]);
     commit(&d, "e.txt", "e");
-    std::fs::write(d.join("a.txt"), "dirty").unwrap();
-    sh(&d, &["stash", "push", "-q", "-m", "wip"]);
 
     let Resp::Repo(info) = handle(Req::Open { path: repo.into() }) else { panic!() };
     assert_eq!((info.name.as_str(), info.ahead, info.behind), ("repo", 1, 0));
@@ -139,7 +137,12 @@ fn fixture_repo() {
     let Resp::Diff(p) = rq(Req::Diff { repo: repo.into(), oid: bcommit, path: "b1.txt".into(), old_path: None, context: 3, ignore_ws: false, from: None }) else { panic!() };
     assert!(p.text.contains("new file mode") && p.text.contains("+1") && !p.truncated, "{}", p.text);
 
+    std::fs::write(d.join("a.txt"), "dirty").unwrap();
+    sh(&d, &["stash", "push", "-q", "-m", "wip"]);
+    // the stash shows in the log: its WIP commit first, then its index commit
+    assert!(matches!(handle(Req::Count { repo: repo.into(), hidden: vec![] }), Resp::Count(8)));
     let Resp::Refs(r) = handle(Req::Refs { repo: repo.into() }) else { panic!() };
+    assert_eq!(log(repo, 0, 100)[0].oid, r.stashes[0].oid);
     let has = |n: &str, k: RefKind| r.refs.iter().any(|x| x.name == n && x.kind == k);
     assert!(has("main", RefKind::Branch) && has("feature", RefKind::Branch));
     assert!(has("origin/main", RefKind::Remote) && has("v1", RefKind::Tag) && has("v2", RefKind::Tag));

@@ -66,7 +66,7 @@
   let filters = $state({ locations: false, files: false });
   let target = $state<{ index: number; n: number } | null>(null);
   let notice = $state("");
-  let view = $state<"commit" | "work" | "stash">("commit");
+  let view = $state<"commit" | "work" | "stash">("work"); // the changes row is selected first, whether or not there are changes
   let stashSel = $state<Stash | null>(null);
   // the shown stash was popped or dropped: back to the commit view
   $effect(() => { if (view === "stash" && !tab.refs.stashes.some((s) => s.oid === stashSel?.oid)) view = "commit"; });

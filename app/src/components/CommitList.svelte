@@ -28,6 +28,7 @@
     target: { index: number; n: number } | null; onconsumed: () => void;
   } = $props();
 
+  const stashOids = $derived(new Set(tab.refs.stashes.map((s) => s.oid)));
   const cache = $derived(cacheFor(tab.id));
   // Pages and graph describe one tab.rev. A list that was away (Files pane, other tab) while history moved starts
   // clean; a mounted one refreshes in place (refresh below), so rows never blank out.
@@ -328,7 +329,9 @@
         <div class="rb">
           <div class="s" class:headc={c.oid === tab.info.oid}>{#if ticket}<span class="tk">{ticket}</span>{/if}{rest}</div>
           <div class="m">
-            {#if labels.length}
+            {#if stashOids.has(c.oid)}
+              <span class="ref" style:--lc="var(--lane{layout ? layout.nodeColor[v] : 0})">stash</span>
+            {:else if labels.length}
               <span class="ref" class:head={labels[0].head} class:remote={labels[0].kind === "remote"} style:--lc="var(--lane{layout ? layout.nodeColor[v] : 0})">{labels[0].name}</span>
               {#if labels.length > 1}<span class="refmore" title={labels.slice(1).map((l) => l.name).join("\n")}>⑂ +{labels.length - 1}</span>{/if}
             {:else}<span class="au">{c.author}</span><span>·</span><span>{ago(c.time)}</span>{/if}
