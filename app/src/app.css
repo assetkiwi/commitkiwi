@@ -65,8 +65,6 @@ html[data-mac="true"] .titlebar { padding-left: 82px; }
 .tab .x .dot { display: none; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .tab.dirty .x .dot { display: block; } .tab.dirty .x .i { display: none; }
 .tab.dirty:hover .x .dot { display: none; } .tab.dirty:hover .x .i { display: block; }
-/* inactive window: everything dims a little, like a native macOS window */
-html.inactive #app::after { content: ""; position: fixed; inset: 0; z-index: 100; pointer-events: none; background: var(--bg); opacity: .35; }
 .tab { height: 32px; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 12px; border-radius: 8px 8px 0 0; color: var(--muted); max-width: 240px; }
 .tab > .i, .tab-main .i { margin-right: 6px; }
 .tab-main { display: flex; align-items: center; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -385,6 +383,11 @@ mark.wd { color: inherit; border-radius: 0; padding: 0; } /* square: a mark is s
 .fr { flex: none; display: flex; padding: 3px 8px 3px 22px; border-radius: 6px; text-align: left; color: var(--text-2); min-width: 0; }
 .fr:hover { background: var(--hover); } .fr.sel { background: var(--sel); color: var(--text); }
 .fr .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* rtl box: overflow is cut on the left; the dir="ltr" child keeps the path itself in order */
+.fr .tail { direction: rtl; text-align: left; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.fr .mid { display: flex; min-width: 0; text-overflow: clip; }
+.fr .mid .head { flex: 0 2 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fr .mid .tail { flex: 0 1 auto; min-width: 0; text-overflow: clip; }
 .seg.fmode { flex: none; width: 200px; align-self: center; margin: 6px 0 10px; } .seg.fmode button { height: 24px; }
 .rb .s.headc { font-weight: 700; }
 .rb .m .au { font-style: italic; }

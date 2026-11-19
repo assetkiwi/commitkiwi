@@ -299,8 +299,8 @@ export async function mockRpc(location: string, req: Req): Promise<any> {
     stashes: [{ name: "stash@{0}", oid: STASH, message: "WIP on feature/d11-upgrade-C: half-done config export" }],
     submodules: [{ path: "vendor/theme", oid: oid(5), initialized: true }],
     worktrees: [
-      { path: "/work/demo-repo", branch, oid: oid(0), current: true },
-      { path: "/work/demo-repo-hotfix", branch: "main", oid: oid(900), current: false },
+      { path: "/work/demo-repo", branch, oid: oid(0), current: true, locked: false },
+      { path: "/work/demo-repo-hotfix", branch: "main", oid: oid(900), current: false, locked: false },
     ],
   } };
   if ("Log" in req) {
@@ -427,7 +427,7 @@ export async function mockRpc(location: string, req: Req): Promise<any> {
   }
   if ("Ignore" in req) { work = work.filter((f) => f.path !== req.Ignore.path); w.__mockCalls.push(req); return "Done"; }
   if ("Stash" in req || "Pull" in req || "Fetch" in req || "Push" in req || "PopStash" in req) { w.__mockCalls.push(req); return "Done"; }
-  if ("AddWorktree" in req || "AddSubmodule" in req || "UpdateSubmodules" in req || "SyncSubmodules" in req) { w.__mockCalls.push(req); return "Done"; }
+  if ("AddWorktree" in req || "WorktreeOp" in req || "AddSubmodule" in req || "UpdateSubmodules" in req || "SyncSubmodules" in req) { w.__mockCalls.push(req); return "Done"; }
   if ("Checkout" in req) { w.__mockCalls.push(req); branch = req.Checkout.name; return "Done"; }
   // ---- M5a
   const m5 = Object.keys(req)[0];

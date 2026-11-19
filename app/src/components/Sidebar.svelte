@@ -139,8 +139,8 @@
     {@render header("worktrees", "WORKTREES", worktrees.length, sectionMenu("worktrees"))}
     {#if !closed.has("worktrees")}
       <ul>{#each worktrees as w (w.path)}
-        <li class:head={w.current} oncontextmenu={(e) => showContextMenu(e, WORKTREE, { worktree_name: base(w.path), worktree_path: w.path, current: w.current })}><button class="go" style:padding-left="14px" title={w.path} onclick={() => onjump(w.oid)}>
-          <span class="t">{base(w.path)}</span>{#if w.branch}<span class="wb">{w.branch}</span>{/if}
+        <li class:head={w.current} oncontextmenu={(e) => showContextMenu(e, WORKTREE, { worktree_name: base(w.path), worktree_path: w.path, current: w.current, locked: w.locked })}><button class="go" style:padding-left="14px" title={w.path} onclick={() => onjump(w.oid)}>
+          <span class="t">{base(w.path)}</span>{#if w.locked}<svg class="i" aria-label="Locked"><use href="#i-lock" /></svg>{/if}{#if w.branch}<span class="wb">{w.branch}</span>{/if}
         </button></li>
       {/each}</ul>
     {/if}

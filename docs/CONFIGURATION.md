@@ -79,6 +79,7 @@ Every preference, with its default (the example file lists them all, commented o
 	"glab_path": "",
 	"open_request_after_create": true,
 	"keymap_preset": "default",         // or "sublime-style"
+	"path_truncation": "middle",        // long side bar paths: "start", "middle" or "end"
 	"cleanup_stale_days": 90,           // Clean Up Branches: stale after this many days without a commit (0: off)
 	// Clean Up Branches never offers these; * matches anything (also /), names are matched without the remote
 	"cleanup_protected_branches": ["main", "master", "develop", "trunk", "release/*"],

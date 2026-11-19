@@ -697,6 +697,16 @@
       },
     });
   }
+  const worktreeOp = (action: "remove" | "lock" | "unlock" | "prune", path: string, force = false, onError?: (e: string) => boolean) =>
+    op(`git worktree ${action}${force ? " --force" : ""}${path ? ` ${path}` : ""}`, { WorktreeOp: { repo, path, action, force } }, onError);
+  /** asks first; a worktree with changes is removed only after a second, forced, confirmation */
+  function removeWorktree(path: string) {
+    const name = path.slice(path.lastIndexOf("/") + 1);
+    const force = () => show(yesNo(["Remove Worktree", name], "It has changes", "Remove anyway",
+      "Uncommitted and untracked files in this worktree are lost", () => void worktreeOp("remove", path, true)));
+    show(yesNo(["Remove Worktree", name], "Remove worktree?", "Remove", `Deletes the folder ${path}; its branch stays`,
+      () => void worktreeOp("remove", path, false, (e) => (e.includes("--force") ? (force(), true) : false))));
+  }
   function addSubmodulePrompt() {
     showOverlay({
       placeholder: "Repository URL", pills: ["Add Submodule"], items: [], text: true,
@@ -797,9 +807,9 @@
     showMenu(e.currentTarget as HTMLElement, LAYOUTS.map((l) => ({ label: l.caption, checked: app.layout === l.value, run: () => setLayout(l.value) })));
   }
   const mac = platform === "mac";
-  const openDir = () => api.openEditor(mac ? "open {path}" : "xdg-open {path}", tab.path, "");
+  const openDir = (dir = tab.path) => api.openEditor(mac ? "open {path}" : "xdg-open {path}", dir, "");
   const openRepoInEditor = () => api.openEditor(host ? app.diff.editorRemote : app.diff.editorLocal, tab.path, host);
-  const openTerminal = () => api.openEditor(app.prefs.terminal_command, tab.path, "");
+  const openTerminal = (dir = tab.path) => api.openEditor(app.prefs.terminal_command, dir, "");
   const actionMenu = (e: MouseEvent) => showContextMenu(e.currentTarget as HTMLElement, ACTIONS, { repo_path: tab.path, request: requestNoun(ui.forgeKinds[tab.id] ?? null) });
 
   const columns = $derived(sideColumns(app.layout, ui.sidebar));
@@ -879,6 +889,10 @@
       }),
       registerCommand("open_submodule", { run: (a) => openRepo(tab.location, `${tab.path}/${need(a.submodule_path, "submodule")}`) }),
       registerCommand("open_worktree", { run: (a) => openRepo(tab.location, need(a.worktree_path, "worktree")) }),
+      registerCommand("remove_worktree", { run: (a) => removeWorktree(need(a.worktree_path, "worktree")) }),
+      registerCommand("lock_worktree", { run: (a) => worktreeOp("lock", need(a.worktree_path, "worktree")) }),
+      registerCommand("unlock_worktree", { run: (a) => worktreeOp("unlock", need(a.worktree_path, "worktree")) }),
+      registerCommand("prune_worktrees", { caption: "Prune Worktrees", run: () => worktreeOp("prune", "") }),
       registerCommand("copy_remote_url", { run: async (a) => { await copyLater(api.remoteUrl(tab.location, repo, need(a.remote, "remote"))); } }),
       registerCommand("revert_commits", { run: (a) => eachCommit("revert", a) }),
       registerCommand("cherry_pick_commits", { run: (a) => eachCommit("cherry-pick", a) }),
@@ -933,8 +947,9 @@
       // a menu passes the branch; never the selection
       registerCommand("create_pull_request", { caption: `Create ${requestNoun(ui.forgeKinds[tab.id] ?? null)}…`, run: (a) => { request = { source: str(a.branch) }; } }),
       // local folders only (a remote path means nothing to Finder or Terminal)
-      ...(host ? [] : [registerCommand("open_dir", { caption: mac ? "Reveal in Finder" : "Open Containing Folder…", run: (a) => reveal(str(a.path)) })]),
-      ...(host || !app.prefs.terminal_command.trim() ? [] : [registerCommand("open_terminal", { caption: "Open Repository in Terminal", run: openTerminal })]),
+      // `folder`: an absolute folder to open (a worktree) instead of revealing `path` in this repo
+      ...(host ? [] : [registerCommand("open_dir", { caption: mac ? "Reveal in Finder" : "Open Containing Folder…", run: (a) => (str(a.folder) ? openDir(str(a.folder)!) : reveal(str(a.path))) })]),
+      ...(host || !app.prefs.terminal_command.trim() ? [] : [registerCommand("open_terminal", { caption: "Open Repository in Terminal", run: (a) => openTerminal(str(a.folder) ?? tab.path) })]),
     ];
     return () => offs.forEach((off) => off());
   });

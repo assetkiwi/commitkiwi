@@ -147,10 +147,18 @@ assert.deepEqual(await open(subRow), ["Open theme", "Update theme", "Sync theme 
 await pick("Update theme");
 assert.deepEqual(await sent("UpdateSubmodules", 1), { repo: "/work/demo-repo", init: false, path: "vendor/theme" });
 const wtRow = side.locator("li", { has: page.locator(".go[title='/work/demo-repo-hotfix']") });
-assert.deepEqual(await open(wtRow), ["Open demo-repo-hotfix", "Copy Worktree Name"]);
+assert.deepEqual(await open(wtRow), ["Open demo-repo-hotfix", "Reveal in Finder", "Open in Terminal", "-", "Lock demo-repo-hotfix",
+  "Remove demo-repo-hotfix…", "-", "Copy Worktree Name", "Copy Worktree Path"]);
 await pick("Copy Worktree Name");
 assert.equal(await clipboard(), "demo-repo-hotfix");
-assert.ok(!(await open(side.locator("li", { has: page.locator(".go[title='/work/demo-repo']") }))).some((i) => i.startsWith("Open")), "the current worktree is open already");
+await open(wtRow);
+await pick("Lock demo-repo-hotfix");
+assert.deepEqual(await sent("WorktreeOp", 1), { repo: "/work/demo-repo", path: "/work/demo-repo-hotfix", action: "lock", force: false });
+await open(wtRow);
+await pick("Remove demo-repo-hotfix…");
+await page.locator(".overlay li", { hasText: "Remove" }).first().click();
+assert.deepEqual(await sent("WorktreeOp", 2), { repo: "/work/demo-repo", path: "/work/demo-repo-hotfix", action: "remove", force: false });
+assert.ok(!(await open(side.locator("li", { has: page.locator(".go[title='/work/demo-repo']") }))).includes("Open demo-repo"), "the current worktree is open already");
 await page.keyboard.press("Escape");
 
 // ================= Commits =================

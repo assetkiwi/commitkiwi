@@ -166,6 +166,14 @@
             <select value={app.prefs.font_size} disabled={locked("font_size")} onchange={(e) => setPrefs({ font_size: num(e) })}>{#each SIZES as s}<option value={s}>{s} px</option>{/each}</select>
             {@render fromFile("font_size")}
           </label>
+          <label class="pf"><span class="pl">Long file paths</span>
+            <select value={app.prefs.path_truncation} disabled={locked("path_truncation")} onchange={(e) => setPrefs({ path_truncation: e.currentTarget.value as typeof app.prefs.path_truncation })}>
+              <option value="start">Cut at the start (…ice/File.php)</option>
+              <option value="middle">Cut in the middle (web/mo…ice/File.php)</option>
+              <option value="end">Cut at the end (web/modules/cu…)</option>
+            </select>
+            {@render fromFile("path_truncation")}
+          </label>
           <div class="pf"><span class="pl">Config files</span>
             <button class="btn sm" onclick={() => runCommand("edit_settings")}>Edit settings.json…</button>
             <button class="btn sm" onclick={() => runCommand("browse_packages")}>Open Configuration Folder…</button>

@@ -232,6 +232,7 @@ fn run(req: Req) -> Result<Resp, String> {
         Req::PopStash { repo } => done(git_out(&repo, &["stash", "pop"]).map(|_| ()))?,
         Req::Checkout { repo, name } => done(checkout(&repo, &name))?,
         Req::AddWorktree { repo, path, branch } => done(add_worktree(&repo, &path, branch.as_deref()))?,
+        Req::WorktreeOp { repo, path, action, force } => done(worktree_op(&repo, &path, action, force))?,
         Req::AddSubmodule { repo, url, path } => done(add_submodule(&repo, &url, path.as_deref()))?,
         Req::UpdateSubmodules { repo, init, path } => {
             let mut args = vec!["submodule", "update"];
@@ -702,7 +703,7 @@ fn refs(repo: &str) -> Result<Refs, String> {
 fn parse_worktrees(out: &str, root: &str) -> Vec<Worktree> {
     out.split("\n\n")
         .filter_map(|block| {
-            let (mut path, mut oid, mut branch) = (None, String::new(), None);
+            let (mut path, mut oid, mut branch, mut locked) = (None, String::new(), None, false);
             for l in block.lines() {
                 if let Some(p) = l.strip_prefix("worktree ") {
                     path = Some(p.to_string());
@@ -710,10 +711,12 @@ fn parse_worktrees(out: &str, root: &str) -> Vec<Worktree> {
                     oid = o.into();
                 } else if let Some(b) = l.strip_prefix("branch ") {
                     branch = Some(b.strip_prefix("refs/heads/").unwrap_or(b).to_string());
+                } else if l == "locked" || l.starts_with("locked ") {
+                    locked = true;
                 }
             }
             let path = path?;
-            Some(Worktree { current: path == root, path, branch, oid })
+            Some(Worktree { current: path == root, path, branch, oid, locked })
         })
         .collect()
 }
@@ -1658,6 +1661,30 @@ fn add_worktree(repo: &str, path: &str, branch: Option<&str>) -> Result<(), Stri
     if let Some(b) = branch {
         args.push(plain_arg("branch", b)?);
     }
+    git_out(repo, &args).map(|_| ())
+}
+
+/// Only a worktree `git worktree list` shows, and never the one this repo is (git refuses the main one itself).
+fn worktree_op(repo: &str, path: &str, action: WorktreeAction, force: bool) -> Result<(), String> {
+    if action == WorktreeAction::Prune {
+        return git_out(repo, &["worktree", "prune"]).map(|_| ());
+    }
+    let root = git(repo, &["rev-parse", "--show-toplevel"])?;
+    let listed = parse_worktrees(&git(repo, &["worktree", "list", "--porcelain"])?, root.trim());
+    if !listed.iter().any(|w| !w.current && w.path == path) {
+        return Err(format!("not another worktree of this repository: {path:?}"));
+    }
+    let verb = match action {
+        WorktreeAction::Remove => "remove",
+        WorktreeAction::Lock => "lock",
+        WorktreeAction::Unlock => "unlock",
+        WorktreeAction::Prune => unreachable!(),
+    };
+    let mut args = vec!["worktree", verb];
+    if force && action == WorktreeAction::Remove {
+        args.push("--force");
+    }
+    args.extend(["--", path]);
     git_out(repo, &args).map(|_| ())
 }
 

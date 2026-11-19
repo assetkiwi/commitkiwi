@@ -28,13 +28,10 @@
     // the update check waits for the saved preferences (it may be switched off)
     void init().then(() => { if (app.prefs.update_check) void checkForUpdates(false); });
     startLlm();
-    // macOS dims an inactive window; so do we. Focus also picks up edits to the user's command/menu files.
-    const dim = (on: boolean) => () => document.documentElement.classList.toggle("inactive", on);
-    const onBlur = dim(true);
-    const onFocus = () => { dim(false)(); void loadUserConfig(); };
-    window.addEventListener("blur", onBlur);
+    // focus picks up edits to the user's command/menu files
+    const onFocus = () => void loadUserConfig();
     window.addEventListener("focus", onFocus);
-    return () => { offMenu(); offKeys(); offCommands(); window.removeEventListener("blur", onBlur); window.removeEventListener("focus", onFocus); };
+    return () => { offMenu(); offKeys(); offCommands(); window.removeEventListener("focus", onFocus); };
   });
   const tab = $derived(app.tabs.find((t) => t.id === app.active));
   // in a fixed order (by id), not the tab bar's: reordering tabs must not move (and so reset) a mounted view

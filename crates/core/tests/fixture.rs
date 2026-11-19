@@ -280,6 +280,21 @@ fn fixture_repo() {
         assert!(matches!(rq(Req::Count { repo: repo.into(), hidden: vec![bad.into()] }), Resp::Err(_)), "{bad}");
     }
     assert!(matches!(rq(Req::AddWorktree { repo: repo.into(), path: "--detach".into(), branch: None }), Resp::Err(_)));
+    // worktree ops: lock shows in Refs, only another listed worktree, dirty remove needs force
+    let wop = |path: &str, action, force| rq(Req::WorktreeOp { repo: repo.into(), path: path.into(), action, force });
+    let cur = r.worktrees.iter().find(|w| w.current).unwrap().path.clone();
+    assert!(matches!(wop(&w.path, WorktreeAction::Lock, false), Resp::Done));
+    let Resp::Refs(r2) = rq(Req::Refs { repo: repo.into() }) else { panic!() };
+    assert!(r2.worktrees.iter().any(|x| x.path == w.path && x.locked));
+    assert!(matches!(wop(&w.path, WorktreeAction::Unlock, false), Resp::Done));
+    assert!(matches!(wop(&cur, WorktreeAction::Remove, true), Resp::Err(_)), "never this worktree");
+    assert!(matches!(wop("/elsewhere", WorktreeAction::Remove, true), Resp::Err(_)), "only listed ones");
+    std::fs::write(std::path::Path::new(&w.path).join("dirty.txt"), "x").unwrap();
+    assert!(matches!(wop(&w.path, WorktreeAction::Remove, false), Resp::Err(e) if e.contains("--force")));
+    assert!(matches!(wop(&w.path, WorktreeAction::Remove, true), Resp::Done));
+    assert!(matches!(wop("", WorktreeAction::Prune, false), Resp::Done));
+    let Resp::Refs(r3) = rq(Req::Refs { repo: repo.into() }) else { panic!() };
+    assert_eq!(r3.worktrees.len(), 1);
     assert!(matches!(rq(Req::AddSubmodule { repo: repo.into(), url: "--evil".into(), path: None }), Resp::Err(_)));
     assert!(matches!(rq(Req::UpdateSubmodules { repo: repo.into(), init: true, path: None }), Resp::Done));
     assert!(matches!(rq(Req::SyncSubmodules { repo: repo.into(), path: None }), Resp::Done));

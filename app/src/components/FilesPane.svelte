@@ -6,6 +6,7 @@
 <script lang="ts">
   import { SvelteSet } from "svelte/reactivity";
   import { api } from "../lib/api";
+  import { app } from "../lib/state.svelte";
   import { loadDetail } from "../lib/commitCache";
   import type { Tab } from "../lib/state.svelte";
   import type { Commit, Detail, Status, WorkFile } from "../lib/types";
@@ -82,7 +83,11 @@
 </script>
 
 {#snippet path(p: string)}
-  <span class="t" title={p}>{p}</span>
+  {@const cut = app.prefs.path_truncation}
+  {#if cut === "end"}<span class="t" title={p}>{p}</span>
+  {:else if cut === "start"}<span class="t tail" title={p}><span dir="ltr">{p}</span></span>
+  <!-- middle: the head ends in "…", the tail is clipped from its left; the head gives way twice as fast (keeps the file name) -->
+  {:else}<span class="t mid" title={p}><span class="head">{p.slice(0, p.length >> 1)}</span><span class="tail"><span dir="ltr">{p.slice(p.length >> 1)}</span></span></span>{/if}
 {/snippet}
 
 <div class="filespane">
@@ -106,7 +111,7 @@
           </button>
           {#if !closed.has(key)}
             {#each shown.slice(0, CAP) as f (f.path)}
-              <button class="fr" class:sel={current === `${staged ? "s" : "u"}:${f.path}`} onclick={() => onworkfile(f.path, staged)} oncontextmenu={(e) => menu(e, workFileMenu(f, staged))}>{@render path(f.path)}</button>
+              <button class="fr" class:sel={current === `${staged ? "s" : "u"}:${f.path}`} onclick={() => onworkfile(f.path, staged)} oncontextmenu={(e) => menu(e, workFileMenu(f, staged))} aria-label={f.path}>{@render path(f.path)}</button>
             {/each}
           {/if}
         {/if}
@@ -121,7 +126,7 @@
         </button>
         {#if !closed.has("changes")}
           {#each shown.slice(0, CAP) as f (f.path)}
-            <button class="fr" class:sel={current === `c:${f.path}`} onclick={() => oncommitfile(f.path)} oncontextmenu={(e) => menu(e, commitFileMenu(f, commit.oid, from?.oid ?? null, false))}>{@render path(f.path)}</button>
+            <button class="fr" class:sel={current === `c:${f.path}`} onclick={() => oncommitfile(f.path)} oncontextmenu={(e) => menu(e, commitFileMenu(f, commit.oid, from?.oid ?? null, false))} aria-label={f.path}>{@render path(f.path)}</button>
           {/each}
         {/if}
       {/if}
@@ -131,7 +136,7 @@
       </button>
       {#if !closed.has("tree")}
         {#if found}
-          {#each found.slice(0, CAP) as p (p)}<button class="fr" class:sel={treeSel === p} onclick={() => onopen(p)} oncontextmenu={(e) => treeMenu(e, p)}>{@render path(p)}</button>{/each}
+          {#each found.slice(0, CAP) as p (p)}<button class="fr" class:sel={treeSel === p} onclick={() => onopen(p)} oncontextmenu={(e) => treeMenu(e, p)} aria-label={p}>{@render path(p)}</button>{/each}
           {#if found.length > CAP}<p class="hint pad">+{found.length - CAP} more: refine the filter</p>{/if}
         {:else}
           <FileTree {tab} oid={treeOid} reveal={treeSel} selected={treeSel} {onopen} oncontext={treeMenu} />

@@ -13,7 +13,7 @@ export interface Stash { name: string; oid: string; message: string }
 export interface Submodule { path: string; oid: string; initialized: boolean }
 /** `Graph` response: parent rows per commit, and the rows refs point at */
 export interface GraphData { parents: number[][]; tips: number[] }
-export interface Worktree { path: string; branch: string | null; oid: string; current: boolean }
+export interface Worktree { path: string; branch: string | null; oid: string; current: boolean; locked: boolean }
 export interface Refs { refs: RefItem[]; stashes: Stash[]; submodules: Submodule[]; worktrees: Worktree[]; remotes: string[] }
 export interface Label { name: string; kind: RefKind; head: boolean }
 export interface Commit {
@@ -60,6 +60,7 @@ export type Req =
   | { Push: { repo: string; flags: string[]; remote?: string | null; branch?: string | null } }
   | { Checkout: { repo: string; name: string } }
   | { AddWorktree: { repo: string; path: string; branch: string | null } }
+  | { WorktreeOp: { repo: string; path: string; action: "remove" | "lock" | "unlock" | "prune"; force: boolean } }
   | { AddSubmodule: { repo: string; url: string; path: string | null } }
   /** `path`: only that submodule */
   | { UpdateSubmodules: { repo: string; init: boolean; path?: string | null } }

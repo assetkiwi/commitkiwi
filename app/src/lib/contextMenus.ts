@@ -91,10 +91,18 @@ export const SUBMODULE: MenuDef[] = [
   { caption: "Sync $submodule_name URL", command: "sync_submodule", args: { submodule_path: "$submodule_path" }, visible: "initialized" },
 ];
 
-/** vars: worktree_name, worktree_path, current */
+/** vars: worktree_name, worktree_path, current, locked, reveal */
 export const WORKTREE: MenuDef[] = [
   { caption: "Open $worktree_name", command: "open_worktree", args: { worktree_path: "$worktree_path" }, visible: "!current" },
+  { caption: "$reveal", command: "open_dir", args: { folder: "$worktree_path" } },
+  { caption: "Open in Terminal", command: "open_terminal", args: { folder: "$worktree_path" } },
+  SEP,
+  { caption: "Lock $worktree_name", command: "lock_worktree", args: { worktree_path: "$worktree_path" }, visible: "!current !locked" },
+  { caption: "Unlock $worktree_name", command: "unlock_worktree", args: { worktree_path: "$worktree_path" }, visible: "!current locked" },
+  { caption: "Remove $worktree_name…", command: "remove_worktree", args: { worktree_path: "$worktree_path" }, visible: "!current !locked" },
+  SEP,
   copy("Copy Worktree Name", "$worktree_name"),
+  copy("Copy Worktree Path", "$worktree_path"),
 ];
 
 /** Section headers in Locations (and their gear buttons). */
@@ -110,7 +118,7 @@ export const SECTIONS: Record<string, MenuDef[]> = {
     { caption: "Update All Submodules", command: "update_submodule" },
     { caption: "Sync All Submodule URLs", command: "sync_submodule" },
   ],
-  worktrees: [{ caption: "Add Worktree…", ...palette("add_worktree") }],
+  worktrees: [{ caption: "Add Worktree…", ...palette("add_worktree") }, { caption: "Prune Worktrees", command: "prune_worktrees" }],
 };
 
 /**

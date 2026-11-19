@@ -96,6 +96,8 @@ export interface Prefs {
   cleanup_protected_branches: string[];
   /** check for a new version at startup (Help > Check for Updates… works either way) */
   update_check: boolean;
+  /** where a too-long file path in the side bar is cut: "start" (…ice/File.php), "middle" (web/mo…ice/File.php), "end" */
+  path_truncation: "start" | "middle" | "end";
 }
 export const PREF_DEFAULTS: Prefs = {
   ui_font_size: 13, font_size: 12, expand_merge_commits_by_default: true,
@@ -104,10 +106,10 @@ export const PREF_DEFAULTS: Prefs = {
   commit_model: "", commit_suggest: true, natural_search: false, forge_hosts: {}, gh_path: "", glab_path: "", open_request_after_create: true,
   keymap_preset: "default",
   cleanup_stale_days: 90, cleanup_protected_branches: ["main", "master", "develop", "trunk", "release/*"],
-  update_check: true,
+  update_check: true, path_truncation: "middle",
 };
 /** Allowed values where a type check is not enough. */
-const PREF_CHOICES: Partial<Record<keyof Prefs, unknown[]>> = { keymap_preset: ["default", "sublime-style"] };
+const PREF_CHOICES: Partial<Record<keyof Prefs, unknown[]>> = { keymap_preset: ["default", "sublime-style"], path_truncation: ["start", "middle", "end"] };
 
 export const app = $state({
   prefs: { ...PREF_DEFAULTS } as Prefs,

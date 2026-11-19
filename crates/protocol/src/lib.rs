@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::io::{self, Read};
 
-pub const PROTO_VERSION: u32 = 21;
+pub const PROTO_VERSION: u32 = 22;
 /// Written by the agent before its first frame. The client discards everything before it, so
 /// output from a remote shell profile (motd, echo in .bashrc) cannot corrupt the stream.
 pub const MAGIC: &[u8] = b"\0commitkiwi-agent/1\n";
@@ -114,6 +114,9 @@ pub enum Req {
     Checkout { repo: String, name: String },
     /// `git worktree add <path> [<branch>]`; a relative path is relative to the repo root.
     AddWorktree { repo: String, path: String, branch: Option<String> },
+    /// `git worktree remove|lock|unlock <path>` on a listed worktree other than this one (`force`: remove
+    /// one with changes); `Prune`: `git worktree prune` (path ignored).
+    WorktreeOp { repo: String, path: String, action: WorktreeAction, #[serde(default)] force: bool },
     /// `git submodule add <url> [<path>]`.
     AddSubmodule { repo: String, url: String, path: Option<String> },
     /// `git submodule update --recursive` (`init`: also `--init`); `path`: only that submodule (a listed one).
@@ -388,6 +391,15 @@ pub enum RewriteAction {
     MoveUp,
     MoveDown,
     Drop,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum WorktreeAction {
+    Remove,
+    Lock,
+    Unlock,
+    Prune,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
@@ -675,6 +687,9 @@ pub struct Worktree {
     pub oid: String,
     /// The worktree this repo was opened from.
     pub current: bool,
+    /// `git worktree lock`ed (prune and remove leave it alone).
+    #[serde(default)]
+    pub locked: bool,
 }
 
 /// A ref label attached to a commit row.

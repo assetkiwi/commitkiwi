@@ -668,11 +668,6 @@ await page.getByRole("button", { name: "More actions" }).click();
 await page.getByRole("menuitem", { name: "Copy Repository Path" }).click();
 assert.equal(await page.evaluate(() => navigator.clipboard.readText()), "/work/demo-repo");
 
-// inactive window dims
-await page.evaluate(() => window.dispatchEvent(new Event("blur")));
-assert.equal(await page.evaluate(() => document.documentElement.classList.contains("inactive")), true);
-await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-assert.equal(await page.evaluate(() => document.documentElement.classList.contains("inactive")), false);
 if (shots) await page.screenshot({ path: `${shots}/f2-shell.png` });
 
 // ================= F3: sidebar =================
@@ -724,7 +719,7 @@ await page.getByRole("menuitem", { name: "Sync All Submodule URLs" }).click();
 await page.waitForFunction(() => globalThis.__mockCalls.some((c) => c.SyncSubmodules));
 await page.locator(".side .sh", { hasText: "WORKTREES" }).hover();
 await page.getByRole("button", { name: "WORKTREES options" }).click();
-assert.deepEqual(await page.locator(".popup button .l").allInnerTexts(), ["Add Worktree…"]);
+assert.deepEqual(await page.locator(".popup button .l").allInnerTexts(), ["Add Worktree…", "Prune Worktrees"]);
 await page.getByRole("menuitem", { name: "Add Worktree…" }).click();
 await page.locator(".overlay .pill", { hasText: "Add Worktree" }).waitFor();
 await page.keyboard.type("../wt");
@@ -784,14 +779,14 @@ await page.getByRole("tab", { name: "Files", exact: true }).click();
 const secs = await page.locator(".fsec").allInnerTexts();
 assert.ok(secs.length && secs.every((t) => /^(UNMERGED|MODIFIED|UNTRACKED|STAGED) \(\d+\)$/.test(t)), secs.join());
 await page.locator(".fr").first().click();
-await page.locator(".details.work .dt.on", { hasText: await page.locator(".fr").first().innerText() }).waitFor(); // its file tab opens
+await page.locator(".details.work .dt.on", { hasText: await page.locator(".fr").first().textContent() }).waitFor(); // its file tab opens
 // Tree: count, filter (⌥⌘F) lists matching paths, Escape closes it
 await page.getByRole("tab", { name: "Tree", exact: true }).click();
 await page.locator(".fsec", { hasText: "TREE (5)" }).waitFor();
 await page.keyboard.press("Meta+Alt+f");
 await page.getByRole("textbox", { name: "Filter files" }).waitFor();
 await page.keyboard.type("home");
-assert.deepEqual(await page.locator(".filespane .fr").allInnerTexts(), ["src/Controller/Home.php"]);
+assert.deepEqual(await page.locator(".filespane .fr").allTextContents(), ["src/Controller/Home.php"]);
 await page.locator(".filespane .fr").click();
 await page.locator(".fv-head .path", { hasText: "src/Controller/Home.php" }).waitFor();
 await page.getByRole("textbox", { name: "Filter files" }).focus();
