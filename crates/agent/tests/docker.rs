@@ -30,13 +30,13 @@ async fn linux_agent_in_docker() {
     let Resp::Repo(info) = remote.call(Req::Open { path: "/tmp/r".into() }).await.unwrap() else { panic!() };
     assert_eq!((info.root.as_str(), info.branch.as_deref()), ("/tmp/r", Some("main")));
     assert!(matches!(remote.call(Req::Count { repo: "/tmp/r".into(), hidden: vec![] }).await.unwrap(), Resp::Count(3)));
-    let Resp::Log(log) = remote.call(Req::Log { repo: "/tmp/r".into(), skip: 0, limit: 10, hidden: vec![] }).await.unwrap() else { panic!() };
+    let Resp::Log(log) = remote.call(Req::Log { repo: "/tmp/r".into(), skip: 0, limit: 10, hidden: vec![], order: Default::default() }).await.unwrap() else { panic!() };
     assert_eq!(log.iter().map(|c| c.subject.as_str()).collect::<Vec<_>>(), ["c3", "c2", "c1"]);
     let oids = log.iter().map(|c| c.oid.clone()).collect();
     let Resp::Stats(st) = remote.call(Req::Stats { repo: "/tmp/r".into(), oids }).await.unwrap() else { panic!() };
     assert!(st.iter().all(|(_, n)| *n == 1));
     // M2 requests on the Linux build
-    let Resp::Graph(g) = remote.call(Req::Graph { repo: "/tmp/r".into(), hidden: vec![] }).await.unwrap() else { panic!() };
+    let Resp::Graph(g) = remote.call(Req::Graph { repo: "/tmp/r".into(), hidden: vec![], order: Default::default() }).await.unwrap() else { panic!() };
     assert_eq!(g.parents, vec![vec![1], vec![2], vec![]]);
     let head = log[0].oid.clone();
     let Resp::Show(d) = remote.call(Req::Show { repo: "/tmp/r".into(), oid: head.clone(), from: None }).await.unwrap() else { panic!() };

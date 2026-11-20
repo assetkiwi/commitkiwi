@@ -21,7 +21,7 @@ function commit(i: number): Commit {
     i === 0 ? [{ name: "feature/d11-upgrade-C", kind: "branch", head: true }, { name: "origin/feature/d11-upgrade-C", kind: "remote", head: false }]
     : i === 12 ? [{ name: "feature/d11-upgrade-B", kind: "branch", head: false }]
     : i === 40 ? [{ name: "v2.4.0", kind: "tag", head: false }] : [];
-  return { oid: oid(i), parents: parentsOf(i).map(oid), author, email, time: Math.floor(Date.now() / 1000) - i * 1800,
+  return { oid: oid(i), parents: parentsOf(i).map(oid), author, email, time: Math.floor(Date.now() / 1000) - i * 1800, ctime: Math.floor(Date.now() / 1000) - i * 1800,
     subject: `[25505977]: ${SUBJECTS[i % SUBJECTS.length]}`, files: null, labels };
 }
 
@@ -323,7 +323,7 @@ export async function mockRpc(location: string, req: Req): Promise<any> {
     return { Search: { rows: rows.slice(0, limit), truncated: rows.length > limit } };
   }
   if ("Stats" in req) return { Stats: req.Stats.oids.map((o) => [o, 1 + ((index(o) * 13) % 20)]) };
-  if ("Graph" in req) return { Graph: { parents: Array.from({ length: N }, (_, i) => parentsOf(i)), tips: [0, 12, 40, 300, 900], head: 0 } };
+  if ("Graph" in req) { w.__mockCalls.push(req); return { Graph: { parents: Array.from({ length: N }, (_, i) => parentsOf(i)), tips: [0, 12, 40, 300, 900], head: 0 } }; }
   if ("Locate" in req) { const i = index(req.Locate.oid); return { Locate: i < N ? i : null }; }
   if ("Show" in req) {
     if (req.Show.from) w.__mockCalls.push(req);

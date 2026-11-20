@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::io::{self, Read};
 
-pub const PROTO_VERSION: u32 = 22;
+pub const PROTO_VERSION: u32 = 23;
 /// Written by the agent before its first frame. The client discards everything before it, so
 /// output from a remote shell profile (motd, echo in .bashrc) cannot corrupt the stream.
 pub const MAGIC: &[u8] = b"\0commitkiwi-agent/1\n";
@@ -27,13 +27,14 @@ pub enum Req {
     Refs { repo: String },
     /// `hidden`: full ref names (`refs/heads/x`) left out of the commit list (the eye in Locations).
     Count { repo: String, #[serde(default)] hidden: Vec<String> },
-    Log { repo: String, skip: u32, limit: u32, #[serde(default)] hidden: Vec<String> },
+    /// `order`: the commit list's order (Preferences → Commits); `Graph`, `Locate` and `Search` take the same one.
+    Log { repo: String, skip: u32, limit: u32, #[serde(default)] hidden: Vec<String>, #[serde(default)] order: Order },
     /// File counts for specific commits (fetched lazily for the visible rows; `git log` stats are slow).
     Stats { repo: String, oids: Vec<String> },
     /// Parent row indices for every commit in `Log` order (drives the graph lanes client-side).
-    Graph { repo: String, #[serde(default)] hidden: Vec<String> },
+    Graph { repo: String, #[serde(default)] hidden: Vec<String>, #[serde(default)] order: Order },
     /// Row index of a commit in `Log` order, if it is in the list.
-    Locate { repo: String, oid: String, #[serde(default)] hidden: Vec<String> },
+    Locate { repo: String, oid: String, #[serde(default)] hidden: Vec<String>, #[serde(default)] order: Order },
     /// Full message and changed files (against the first parent; with `from`, against `from`'s first parent:
     /// the combined change of a range of commits).
     Show { repo: String, oid: String, #[serde(default)] from: Option<String> },
@@ -126,7 +127,7 @@ pub enum Req {
     /// Find git repos under `root` (not following symlinks, skipping hidden/vendor dirs), `depth` levels deep.
     ScanRepos { root: String, #[serde(default = "default_scan_depth")] depth: u32 },
     /// Commits matching `query`, as rows in `Log` order (same `hidden` refs); at most `limit` (capped in core).
-    Search { repo: String, query: SearchQuery, #[serde(default)] hidden: Vec<String>, limit: u32 },
+    Search { repo: String, query: SearchQuery, #[serde(default)] hidden: Vec<String>, limit: u32, #[serde(default)] order: Order },
     /// Run a write request as console job `job` (an id the UI picks): git's output streams back as `Resp::Output`
     /// frames with this message's id before the reply, and `Cancel { job }` kills its git process.
     /// Ref-moving requests reply `Moved` instead of `Done`.
@@ -703,6 +704,17 @@ pub struct Label {
     pub head: bool,
 }
 
+/// Commit list order. Each keeps parents below their children (the graph needs that); they differ in how
+/// branches interleave: `Topo` keeps a branch's commits together, the dates mix them by time.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum Order {
+    #[default]
+    Topo,
+    Date,
+    AuthorDate,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Commit {
     pub oid: String,
@@ -711,6 +723,9 @@ pub struct Commit {
     pub email: String,
     /// Unix seconds (author date).
     pub time: i64,
+    /// Unix seconds (committer date).
+    #[serde(default)]
+    pub ctime: i64,
     pub subject: String,
     /// Changed files; None until fetched with `Req::Stats` (0 for merges: git reports no stat).
     pub files: Option<u32>,
@@ -882,12 +897,13 @@ mod tests {
 
     #[test]
     fn roundtrip() {
-        let m = Msg { id: 7, ms: None, body: Req::Log { repo: "~/x".into(), skip: 5, limit: 500, hidden: vec!["refs/heads/x".into()] } };
+        let m = Msg { id: 7, ms: None, body: Req::Log { repo: "~/x".into(), skip: 5, limit: 500, hidden: vec!["refs/heads/x".into()], order: Order::AuthorDate } };
         let bytes = encode(&m);
         let body = read_frame(&mut &bytes[..]).unwrap().unwrap();
         let back: Msg<Req> = decode(&body).unwrap();
         assert_eq!(back.id, 7);
-        assert!(matches!(back.body, Req::Log { skip: 5, limit: 500, ref hidden, .. } if hidden == &["refs/heads/x"]));
+        assert!(matches!(back.body, Req::Log { skip: 5, limit: 500, ref hidden, order: Order::AuthorDate, .. } if hidden == &["refs/heads/x"]));
+        assert_eq!(serde_json::to_value(Order::AuthorDate).unwrap(), "author_date");
     }
 
     #[test]
@@ -908,7 +924,7 @@ mod tests {
         assert!(matches!(req, Req::Stats { ref oids, .. } if oids == &["abc"]));
 
         let c = Commit {
-            oid: "o".into(), parents: vec![], author: "A".into(), email: "e".into(), time: 1, subject: "s".into(),
+            oid: "o".into(), parents: vec![], author: "A".into(), email: "e".into(), time: 1, ctime: 2, subject: "s".into(),
             files: None, labels: vec![Label { name: "main".into(), kind: RefKind::Remote, head: true }],
         };
         let json = serde_json::to_value(Resp::Log(vec![c])).unwrap();

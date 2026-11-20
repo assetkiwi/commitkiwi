@@ -85,12 +85,21 @@ assert.equal((await prefs()).diff_style, "split", "toolbar writes the same setti
 
 // ---- Expand merge commits by default: off -> a freshly loaded repo starts with merges collapsed
 await page.keyboard.press("Meta+,");
-await nav("Diff").click();
+await nav("Commits").click();
+// ---- Commits: graph order reloads the list in that order; absolute times
+const graphs = await page.evaluate(() => globalThis.__mockCalls.filter((c) => c.Graph).length);
+await dialog.getByLabel("Graph order").selectOption("date");
+await page.waitForFunction((n) => globalThis.__mockCalls.filter((c) => c.Graph).length > n, graphs);
+assert.equal(await page.evaluate(() => globalThis.__mockCalls.filter((c) => c.Graph).at(-1).Graph.order), "date");
+await dialog.getByLabel(/^Time/).selectOption("absolute");
+await dialog.getByLabel("Clock").selectOption("24");
+await page.waitForFunction(() => /^\d\d:\d\d$|, \d\d:\d\d$|^\d+ [A-Z][a-z]{2}/.test(document.querySelector("#row-0 .when")?.textContent ?? ""));
 await dialog.getByText("Expand merge commits by default").click();
 assert.equal((await prefs()).expand_merge_commits_by_default, false);
 await dialog.getByRole("button", { name: "Reset to Defaults" }).click();
 p = await prefs();
-assert.deepEqual([p.diff_style, p.diff_context_lines, p.word_wrap, p.expand_merge_commits_by_default], ["split", 3, false, true]);
+assert.deepEqual([p.commit_order, p.time_style, p.time_format, p.expand_merge_commits_by_default], ["topo", "relative", "system", true]);
+assert.match(await page.locator("#row-0 .when").innerText(), /ago|just now/);
 await dialog.getByText("Expand merge commits by default").click();
 await page.keyboard.press("Escape");
 await page.keyboard.press("Meta+w");
@@ -99,7 +108,7 @@ await openDemo();
 await page.locator("#row-0 path.plus").waitFor({ state: "attached" });
 assert.equal(await page.locator("#row-1").count(), 0, "the merge's side rows are hidden");
 await page.keyboard.press("Meta+,");
-await nav("Diff").click();
+await nav("Commits").click();
 await dialog.getByText("Expand merge commits by default").click();
 
 // ---- Repositories: alias edit renames the open tab; hidden refs reset; Add Repositories opens the dialog

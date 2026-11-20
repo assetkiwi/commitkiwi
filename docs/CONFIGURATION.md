@@ -80,6 +80,10 @@ Every preference, with its default (the example file lists them all, commented o
 	"open_request_after_create": true,
 	"keymap_preset": "default",         // or "sublime-style"
 	"path_truncation": "middle",        // long side bar paths: "start", "middle" or "end"
+	"commit_order": "topo",             // commit list: "topo" (branches together), "date" or "author_date"
+	"commit_date": "author",            // date in the commit list: "author" or "commit"
+	"time_style": "relative",           // "relative" (2 h ago) or "absolute" (12:15, Thu, 22:39, 3 Nov)
+	"time_format": "system",            // absolute times: "system", "12" or "24"
 	"cleanup_stale_days": 90,           // Clean Up Branches: stale after this many days without a commit (0: off)
 	// Clean Up Branches never offers these; * matches anything (also /), names are matched without the remote
 	"cleanup_protected_branches": ["main", "master", "develop", "trunk", "release/*"],

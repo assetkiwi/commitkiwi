@@ -2,6 +2,12 @@
 // Pure and import-free so node can test it. Output is flat typed arrays: ~100k rows cost a few MB.
 
 export const LANE_COLORS = 6;
+export const MAX_COL = 9; // lanes beyond this share the last column
+const LANE = 10;
+/** x of a lane's centre in a row's graph cell */
+export const laneX = (lane: number): number => 9 + Math.min(lane, MAX_COL) * LANE;
+/** graph cell width (where the text starts) for a row whose rightmost lane is `maxLane` */
+export const graphWidth = (maxLane: number): number => laneX(maxLane) + 13;
 export const PASS = 0; // lane continues through the row: from == to
 export const IN = 1; //   lane from the top ends at this row's node
 export const OUT = 2; //  line from this row's node down to a lane

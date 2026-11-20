@@ -31,7 +31,25 @@
     // focus picks up edits to the user's command/menu files
     const onFocus = () => void loadUserConfig();
     window.addEventListener("focus", onFocus);
-    return () => { offMenu(); offKeys(); offCommands(); window.removeEventListener("focus", onFocus); };
+    // ⌘A / Ctrl+A after clicking in a diff or file view selects only that view's text, not the whole window
+    // (WKWebView offers the key to the page before the Edit menu's Select All)
+    let lastDown: Node | null = null;
+    const onDown = (e: MouseEvent) => { lastDown = e.target as Node; };
+    const onSelectAll = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== "a" || !(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
+      if ((e.target as HTMLElement).closest?.("input, textarea, [contenteditable]")) return;
+      const from = lastDown ?? document.getSelection()?.anchorNode;
+      const box = (from instanceof Element ? from : from?.parentElement)?.closest(".diff");
+      if (!box) return;
+      e.preventDefault();
+      document.getSelection()?.selectAllChildren(box);
+    };
+    window.addEventListener("mousedown", onDown, true);
+    window.addEventListener("keydown", onSelectAll, true);
+    return () => {
+      offMenu(); offKeys(); offCommands(); window.removeEventListener("focus", onFocus);
+      window.removeEventListener("mousedown", onDown, true); window.removeEventListener("keydown", onSelectAll, true);
+    };
   });
   const tab = $derived(app.tabs.find((t) => t.id === app.active));
   // in a fixed order (by id), not the tab bar's: reordering tabs must not move (and so reset) a mounted view

@@ -40,14 +40,14 @@ fn hundred_thousand_commits() {
     };
     let Resp::Count(n) = time("Count", Req::Count { repo: repo.clone(), hidden: vec![] }) else { panic!() };
     assert_eq!(n, 100_000);
-    time("Log first page (0..500)", Req::Log { repo: repo.clone(), skip: 0, limit: 500, hidden: vec![] });
-    time("Log last page (99500..)", Req::Log { repo: repo.clone(), skip: 99_500, limit: 500, hidden: vec![] });
-    let Resp::Graph(g) = time("Graph (all parents)", Req::Graph { repo: repo.clone(), hidden: vec![] }) else { panic!() };
+    time("Log first page (0..500)", Req::Log { repo: repo.clone(), skip: 0, limit: 500, hidden: vec![], order: Default::default() });
+    time("Log last page (99500..)", Req::Log { repo: repo.clone(), skip: 99_500, limit: 500, hidden: vec![], order: Default::default() });
+    let Resp::Graph(g) = time("Graph (all parents)", Req::Graph { repo: repo.clone(), hidden: vec![], order: Default::default() }) else { panic!() };
     assert_eq!(g.parents.len(), 100_000);
     let bytes = rmp_size(&Resp::Graph(g.clone()));
     println!("{:28} {:>7} KiB", "Graph reply (msgpack)", bytes / 1024);
-    let Resp::Log(last) = commitkiwi_core::handle(Req::Log { repo: repo.clone(), skip: 99_999, limit: 1, hidden: vec![] }) else { panic!() };
-    time("Locate (oldest commit)", Req::Locate { repo: repo.clone(), oid: last[0].oid.clone(), hidden: vec![] });
+    let Resp::Log(last) = commitkiwi_core::handle(Req::Log { repo: repo.clone(), skip: 99_999, limit: 1, hidden: vec![], order: Default::default() }) else { panic!() };
+    time("Locate (oldest commit)", Req::Locate { repo: repo.clone(), oid: last[0].oid.clone(), hidden: vec![], order: Default::default() });
     time("Refs", Req::Refs { repo: repo.clone() });
     time("Status", Req::Status { repo: repo.clone() });
 }

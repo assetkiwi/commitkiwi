@@ -143,6 +143,7 @@ fn context_ops() {
         query: SearchQuery { branch: vec![branch.into()], text: if text.is_empty() { vec![] } else { vec![text.into()] }, ..Default::default() },
         hidden: vec![],
         limit: 100,
+        order: Default::default(),
     });
     let order = git(dir, &["rev-list", "--topo-order", "--exclude=refs/stash", "--glob=refs/*", "HEAD"]);
     let row = |oid: &str| order.lines().position(|l| l == oid).unwrap() as u32;
@@ -156,5 +157,5 @@ fn context_ops() {
     assert_eq!(found.rows, vec![row(&c1)]);
     err(search("nope", ""));
     err(search("--all", ""));
-    err(handle(Req::Search { repo: r(), query: SearchQuery { branch: vec!["main".into(), "side".into()], ..Default::default() }, hidden: vec![], limit: 10 }));
+    err(handle(Req::Search { repo: r(), query: SearchQuery { branch: vec!["main".into(), "side".into()], ..Default::default() }, hidden: vec![], limit: 10, order: Default::default() }));
 }

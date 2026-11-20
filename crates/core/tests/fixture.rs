@@ -16,7 +16,7 @@ fn commit(dir: &std::path::Path, file: &str, msg: &str) {
 }
 
 fn log(repo: &str, skip: u32, limit: u32) -> Vec<Commit> {
-    match handle(Req::Log { repo: repo.into(), skip, limit, hidden: vec![] }) {
+    match handle(Req::Log { repo: repo.into(), skip, limit, hidden: vec![], order: Default::default() }) {
         Resp::Log(c) => c,
         other => panic!("{other:?}"),
     }
@@ -96,7 +96,7 @@ fn fixture_repo() {
 
     // ---- M2 on the 6-commit history: graph, locate, show, tree, blob, diff
     let rq = |req: Req| handle(req);
-    let Resp::Graph(GraphData { parents: g, tips, head }) = rq(Req::Graph { repo: repo.into(), hidden: vec![] }) else { panic!() };
+    let Resp::Graph(GraphData { parents: g, tips, head }) = rq(Req::Graph { repo: repo.into(), hidden: vec![], order: Default::default() }) else { panic!() };
     assert!(tips.contains(&0), "HEAD's row is a tip");
     assert_eq!(head, Some(0), "HEAD's row");
     let c_row = all.iter().position(|c| c.subject == "c").unwrap() as u32;
@@ -111,9 +111,21 @@ fn fixture_repo() {
     }
     let m_row = all.iter().position(|c| c.subject == "merge").unwrap();
     assert_eq!(g[m_row].len(), 2);
+    // the date orders: the same commits, still parents after children, and Log, Graph and Locate agree
+    for order in [Order::Date, Order::AuthorDate] {
+        let Resp::Log(l) = rq(Req::Log { repo: repo.into(), skip: 0, limit: 100, hidden: vec![], order }) else { panic!() };
+        let Resp::Graph(GraphData { parents: g, .. }) = rq(Req::Graph { repo: repo.into(), hidden: vec![], order }) else { panic!() };
+        assert_eq!((l.len(), g.len()), (6, 6));
+        assert!(l.iter().all(|c| c.ctime > 0));
+        for (i, parents) in g.iter().enumerate() {
+            assert!(parents.iter().all(|&row| row as usize > i));
+            assert_eq!(parents.iter().map(|&r| l[r as usize].oid.clone()).collect::<Vec<_>>(), l[i].parents);
+        }
+        assert!(matches!(rq(Req::Locate { repo: repo.into(), oid: l[4].oid.clone(), hidden: vec![], order }), Resp::Locate(Some(4))));
+    }
 
-    assert!(matches!(rq(Req::Locate { repo: repo.into(), oid: all[3].oid.clone(), hidden: vec![] }), Resp::Locate(Some(3))));
-    assert!(matches!(rq(Req::Locate { repo: repo.into(), oid: "0".repeat(40), hidden: vec![] }), Resp::Locate(None)));
+    assert!(matches!(rq(Req::Locate { repo: repo.into(), oid: all[3].oid.clone(), hidden: vec![], order: Default::default() }), Resp::Locate(Some(3))));
+    assert!(matches!(rq(Req::Locate { repo: repo.into(), oid: "0".repeat(40), hidden: vec![], order: Default::default() }), Resp::Locate(None)));
 
     let show = |oid: &str| match rq(Req::Show { repo: repo.into(), oid: oid.into(), from: None }) {
         Resp::Show(d) => d,
@@ -234,7 +246,7 @@ fn fixture_repo() {
     for evil in ["--output=/tmp/pwn", "HEAD", "abc"] {
         let (repo, oid) = (repo.to_string(), evil.to_string());
         for req in [
-            Req::Locate { repo: repo.clone(), oid: oid.clone(), hidden: vec![] },
+            Req::Locate { repo: repo.clone(), oid: oid.clone(), hidden: vec![], order: Default::default() },
             Req::Show { repo: repo.clone(), oid: oid.clone(), from: None },
             Req::Diff { repo: repo.clone(), oid: oid.clone(), path: "a.txt".into(), old_path: None, context: 3, ignore_ws: false, from: None },
             Req::Tree { repo: repo.clone(), oid: oid.clone(), path: "".into() },
@@ -274,8 +286,8 @@ fn fixture_repo() {
     let n = count(vec![]);
     assert_eq!(count(vec!["refs/heads/wt".into()]), n - 1, "hiding a branch drops its own commits");
     assert_eq!(count(vec!["refs/heads/feature".into()]), n, "merged commits stay reachable");
-    assert!(matches!(rq(Req::Locate { repo: repo.into(), oid: w.oid.clone(), hidden: vec!["refs/heads/wt".into()] }), Resp::Locate(None)));
-    let Resp::Log(l) = rq(Req::Log { repo: repo.into(), skip: 0, limit: 100, hidden: vec!["refs/heads/wt".into()] }) else { panic!() };
+    assert!(matches!(rq(Req::Locate { repo: repo.into(), oid: w.oid.clone(), hidden: vec!["refs/heads/wt".into()], order: Default::default() }), Resp::Locate(None)));
+    let Resp::Log(l) = rq(Req::Log { repo: repo.into(), skip: 0, limit: 100, hidden: vec!["refs/heads/wt".into()], order: Default::default() }) else { panic!() };
     assert!(l.iter().all(|c| c.oid != w.oid));
     for bad in ["--all", "heads/x", "refs/heads/*"] {
         assert!(matches!(rq(Req::Count { repo: repo.into(), hidden: vec![bad.into()] }), Resp::Err(_)), "{bad}");

@@ -2,7 +2,7 @@ import { api } from "./api";
 import { dropCache } from "./commitCache";
 import { addRecents, touchRecent, isGoneError, RECENT_MAX, type Recent } from "./recent";
 import { failQueued } from "./jobs.svelte";
-import type { Refs, RepoChange, RepoInfo } from "./types";
+import type { Order, Refs, RepoChange, RepoInfo } from "./types";
 import { resolveTheme, type ThemeDef } from "./themes";
 import kiwiLight from "./themes/kiwi-light.theme.json";
 import kiwiDark from "./themes/kiwi-dark.theme.json";
@@ -98,6 +98,14 @@ export interface Prefs {
   update_check: boolean;
   /** where a too-long file path in the side bar is cut: "start" (…ice/File.php), "middle" (web/mo…ice/File.php), "end" */
   path_truncation: "start" | "middle" | "end";
+  /** commit list order: "topo" keeps each branch's commits together, the dates interleave branches by time */
+  commit_order: Order;
+  /** the date the commit list and details show first: when it was written ("author") or last rewritten ("commit") */
+  commit_date: "author" | "commit";
+  /** commit list times: "relative" (2 h ago) or "absolute" (12:15, Thu 22:39, 3 Nov, 3 Nov 2024) */
+  time_style: "relative" | "absolute";
+  /** absolute times: the system's clock style, or always 12/24 hour */
+  time_format: "system" | "12" | "24";
 }
 export const PREF_DEFAULTS: Prefs = {
   ui_font_size: 13, font_size: 12, expand_merge_commits_by_default: true,
@@ -107,9 +115,13 @@ export const PREF_DEFAULTS: Prefs = {
   keymap_preset: "default",
   cleanup_stale_days: 90, cleanup_protected_branches: ["main", "master", "develop", "trunk", "release/*"],
   update_check: true, path_truncation: "middle",
+  commit_order: "topo", commit_date: "author", time_style: "relative", time_format: "system",
 };
 /** Allowed values where a type check is not enough. */
-const PREF_CHOICES: Partial<Record<keyof Prefs, unknown[]>> = { keymap_preset: ["default", "sublime-style"], path_truncation: ["start", "middle", "end"] };
+const PREF_CHOICES: Partial<Record<keyof Prefs, unknown[]>> = {
+  keymap_preset: ["default", "sublime-style"], path_truncation: ["start", "middle", "end"],
+  commit_order: ["topo", "date", "author_date"], commit_date: ["author", "commit"], time_style: ["relative", "absolute"], time_format: ["system", "12", "24"],
+};
 
 export const app = $state({
   prefs: { ...PREF_DEFAULTS } as Prefs,
@@ -373,7 +385,10 @@ function applyPrefs(): void {
   const root = document.documentElement;
   root.style.setProperty("--diff-size", `${app.prefs.font_size}px`);
   void api.setZoom(app.prefs.ui_font_size / PREF_DEFAULTS.ui_font_size).catch(() => {});
+  // another order lists other rows: each open commit list reloads (CommitList refreshes on a new rev)
+  if (app.prefs.commit_order !== listOrder) { listOrder = app.prefs.commit_order; for (const t of app.tabs) t.rev++; }
 }
+let listOrder = PREF_DEFAULTS.commit_order;
 
 /** Open a working-tree file (path relative to the repo root) in the configured editor. */
 export async function openInEditor(tab: Tab, relPath: string): Promise<void> {

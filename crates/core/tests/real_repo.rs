@@ -33,16 +33,16 @@ fn real_repo_budgets() {
     assert!(matches!(rq(Req::Identity { repo: repo.into() }), Resp::Identity(i) if i.contains('<')));
 
     let Resp::Count(total) = rq(Req::Count { repo: repo.into(), hidden: vec![] }) else { panic!() };
-    let Resp::Graph(GraphData { parents: g, .. }) = timed("graph (all commits)", 1500, || rq(Req::Graph { repo: repo.into(), hidden: vec![] })) else { panic!() };
+    let Resp::Graph(GraphData { parents: g, .. }) = timed("graph (all commits)", 1500, || rq(Req::Graph { repo: repo.into(), hidden: vec![], order: Default::default() })) else { panic!() };
     assert_eq!(g.len(), total as usize);
     assert!(g.iter().enumerate().all(|(i, ps)| ps.iter().all(|&p| p as usize > i)), "topo order");
     let merges = g.iter().filter(|p| p.len() > 1).count();
     eprintln!("   {total} commits, {merges} merges");
 
-    let Resp::Log(page) = rq(Req::Log { repo: repo.into(), skip: 0, limit: 500, hidden: vec![] }) else { panic!() };
+    let Resp::Log(page) = rq(Req::Log { repo: repo.into(), skip: 0, limit: 500, hidden: vec![], order: Default::default() }) else { panic!() };
     // locate agrees with log order
     let probe = page[200].oid.clone();
-    let Resp::Locate(row) = timed("locate", 1500, || rq(Req::Locate { repo: repo.into(), oid: probe, hidden: vec![] })) else { panic!() };
+    let Resp::Locate(row) = timed("locate", 1500, || rq(Req::Locate { repo: repo.into(), oid: probe, hidden: vec![], order: Default::default() })) else { panic!() };
     assert_eq!(row, Some(200));
 
     // the commit with the most files among the first 100

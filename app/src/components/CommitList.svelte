@@ -5,13 +5,13 @@
   import { positionOf, remapParents, visibleRows } from "../lib/collapse";
   import { registerCommand } from "../lib/commands";
   import { tabScope } from "../lib/tabScope";
-  import { layoutGraph, rowMaxLane, type GraphLayout } from "../lib/graph";
+  import { MAX_COL, graphWidth, layoutGraph, rowMaxLane, type GraphLayout } from "../lib/graph";
   import GraphCell from "./GraphCell.svelte";
-  import { ago, colorFor, initials, splitTicket } from "../lib/format";
+  import { ago, fullDate, splitTicket, stamp } from "../lib/format";
   import { app, type Tab } from "../lib/state.svelte";
   import type { Commit } from "../lib/types";
 
-  const ROW = 56, PAGE = 500, OVERSCAN = 6, MAX_COL = 9;
+  const ROW = 48, PAGE = 500, OVERSCAN = 6;
   let { tab, onselect, onpick = () => {}, oncontext, active = true, target, onconsumed, filter = null }: {
     tab: Tab;
     /** search results: only these rows (ascending real indices) are listed; null lists everything */
@@ -69,7 +69,12 @@
 
   const commitAt = (i: number, _v: number): Commit | undefined => cache.pages.get(Math.floor(i / PAGE))?.[i % PAGE];
   const filesOf = (oid: string, _v: number): number | undefined => cache.files.get(oid);
-  const rowWidth = (v: number) => (layout ? Math.min(rowMaxLane(layout, v), MAX_COL) : 0) * 12 + 36;
+  const rowWidth = (v: number) => graphWidth(layout ? Math.min(rowMaxLane(layout, v), MAX_COL) : 0);
+  /** the row's date (Preferences → Commits): author or committer, relative or absolute */
+  const when = (c: Commit) => {
+    const t = app.prefs.commit_date === "commit" && c.ctime ? c.ctime : c.time;
+    return { t, text: app.prefs.time_style === "absolute" ? stamp(t, app.prefs.time_format) : ago(t) };
+  };
 
   /** Recompute the listed rows and lanes after the graph arrives or a merge is collapsed/expanded. */
   function rebuild() {
@@ -93,7 +98,7 @@
       else { layout = cache.layout; headPos = cache.graph.head ?? -1; }
     } else {
       // Lanes need every commit's parents, fetched once (a few hundred KB even for 100k commits).
-      api.graph(tab.location, tab.path, tab.hidden).then((g) => {
+      api.graph(tab.location, tab.path, tab.hidden, app.prefs.commit_order).then((g) => {
         cache.graph = g;
         // Preferences → Diff → Expand merge commits by default (setting expand_merge_commits_by_default)
         if (!app.prefs.expand_merge_commits_by_default) g.parents.forEach((ps, i) => { if (ps.length > 1) cache.collapsed.add(i); });
@@ -107,7 +112,7 @@
   let refreshing = 0;
   async function refresh(rev: number) {
     const mine = ++refreshing;
-    const newTotal = tab.total, hidden = tab.hidden;
+    const newTotal = tab.total, hidden = tab.hidden, order = app.prefs.commit_order;
     // the commit to hold still: the selected one when its row is loaded, else the one at the top of the screen
     const at = (r: number) => cache.pages.get(Math.floor(r / PAGE))?.[r % PAGE];
     const top = Math.min(realOf(Math.max(0, Math.min(total - 1, Math.floor(el.scrollTop / ROW)))), Math.max(0, listTotal - 1));
@@ -115,7 +120,7 @@
     const offset = posOf(heldRow) * ROW - el.scrollTop;
     const want = new Set([0, Math.floor(heldRow / PAGE)]);
     try {
-      const [g, ...got] = await Promise.all([api.graph(tab.location, tab.path, hidden), ...[...want].map((p) => api.log(tab.location, tab.path, p * PAGE, PAGE, hidden))]);
+      const [g, ...got] = await Promise.all([api.graph(tab.location, tab.path, hidden, order), ...[...want].map((p) => api.log(tab.location, tab.path, p * PAGE, PAGE, hidden, order))]);
       if (mine !== refreshing) return; // a newer refresh took over
       const pages = new Map([...want].map((p, k) => [p, got[k]] as const));
       const newAt = (r: number) => pages.get(Math.floor(r / PAGE))?.[r % PAGE];
@@ -203,7 +208,7 @@
     cache.loading.add(p);
     const mine = epoch;
     try {
-      const page = await api.log(tab.location, tab.path, p * PAGE, PAGE, tab.hidden);
+      const page = await api.log(tab.location, tab.path, p * PAGE, PAGE, tab.hidden, app.prefs.commit_order);
       if (mine !== epoch) return;
       cache.pages.set(p, page);
       error = "";
@@ -329,21 +334,19 @@
         {@const [ticket, rest] = splitTicket(c.subject)}
         {@const n = filesOf(c.oid, version)}
         {@const labels = [...c.labels].sort((a, b) => Number(b.head) - Number(a.head))}
-        <span class="av" style:background={colorFor(c.email)}>{initials(c.author)}</span>
+        {@const at = when(c)}
+        {@const lc = `var(--lane${layout ? layout.nodeColor[v] : 0})`}
         <div class="rb">
           <div class="s" class:headc={c.oid === tab.info.oid}>{#if ticket}<span class="tk">{ticket}</span>{/if}{rest}</div>
           <div class="m">
-            {#if stashOids.has(c.oid)}
-              <span class="ref" style:--lc="var(--lane{layout ? layout.nodeColor[v] : 0})">stash</span>
-            {:else if labels.length}
-              <span class="ref" class:head={labels[0].head} class:remote={labels[0].kind === "remote"} style:--lc="var(--lane{layout ? layout.nodeColor[v] : 0})">{labels[0].name}</span>
-              {#if labels.length > 1}<span class="refmore" title={labels.slice(1).map((l) => l.name).join("\n")}>⑂ +{labels.length - 1}</span>{/if}
-            {:else}<span class="au">{c.author}</span><span>·</span><span>{ago(c.time)}</span>{/if}
+            <span class="au">{c.author}</span>
+            {#if stashOids.has(c.oid)}<span class="ref" style:--lc={lc}>stash</span>{/if}
+            {#each labels as l}<span class="ref" class:head={l.head} class:remote={l.kind === "remote"} style:--lc={lc} title={l.name}>{l.name}</span>{/each}
+            <span class="when" title={fullDate(at.t)}>{at.text}</span>
           </div>
         </div>
         {#if n !== undefined}<span class="cnt" title="Changed files">{n}</span>{/if}
       {:else}
-        <span class="av sk"></span>
         <div class="rb"><div class="sk-line" style="width:70%"></div><div class="sk-line" style="width:40%"></div></div>
       {/if}
     </div>

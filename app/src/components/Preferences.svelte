@@ -10,7 +10,7 @@
   import KeyBindings from "./KeyBindings.svelte";
 
   const PAGES = [
-    { id: "appearance", label: "Appearance" }, { id: "diff", label: "Diff" }, { id: "repositories", label: "Repositories" },
+    { id: "appearance", label: "Appearance" }, { id: "commits", label: "Commits" }, { id: "diff", label: "Diff" }, { id: "repositories", label: "Repositories" },
     { id: "git", label: "Git" }, { id: "remote", label: "Remote" }, { id: "key_bindings", label: "Key Bindings" },
   ];
   const CONTEXTS = [0, 1, 3, 5, 10, 25];
@@ -34,7 +34,10 @@
     diff: () => {
       const { mode, context, ignoreWs, words, syntax, wrap } = DIFF_DEFAULTS;
       setDiff({ mode, context, ignoreWs, words, syntax, wrap });
-      setPrefs({ expand_merge_commits_by_default: PREF_DEFAULTS.expand_merge_commits_by_default });
+    },
+    commits: () => {
+      const { expand_merge_commits_by_default, commit_order, commit_date, time_style, time_format } = PREF_DEFAULTS;
+      setPrefs({ expand_merge_commits_by_default, commit_order, commit_date, time_style, time_format });
     },
     repositories: () => { for (const r of repos) { setRepoAlias(r.id, ""); void resetHidden(r.id); } },
     git: () => {
@@ -179,6 +182,39 @@
             <button class="btn sm" onclick={() => runCommand("browse_packages")}>Open Configuration Folder…</button>
           </div>
           <p class="hint">settings.json can set every preference (a commented list of all of them is created the first time); what it sets wins and shows here as read-only. Theme files go in the <code>themes</code> folder.</p>
+        {:else if page.id === "commits"}
+          <label class="pf"><span class="pl">Graph order</span>
+            <select value={app.prefs.commit_order} disabled={locked("commit_order")} onchange={(e) => setPrefs({ commit_order: e.currentTarget.value as typeof app.prefs.commit_order })}>
+              <option value="topo">Branches together</option>
+              <option value="date">Commit date</option>
+              <option value="author_date">Author date</option>
+            </select>
+            {@render fromFile("commit_order")}
+          </label>
+          <p class="hint">Branches together keeps each branch's commits in one run; the dates interleave branches by time. A commit always stays below the ones built on it.</p>
+          <label class="pf"><span class="pl">Date shown</span>
+            <select value={app.prefs.commit_date} disabled={locked("commit_date")} onchange={(e) => setPrefs({ commit_date: e.currentTarget.value as typeof app.prefs.commit_date })}>
+              <option value="author">Author date (when it was written)</option>
+              <option value="commit">Commit date (when it was last committed, rebased or amended)</option>
+            </select>
+            {@render fromFile("commit_date")}
+          </label>
+          <label class="pf"><span class="pl">Time</span>
+            <select value={app.prefs.time_style} disabled={locked("time_style")} onchange={(e) => setPrefs({ time_style: e.currentTarget.value as typeof app.prefs.time_style })}>
+              <option value="relative">Relative (2 h ago)</option>
+              <option value="absolute">Absolute (12:15, Thu, 22:39, 3 Nov)</option>
+            </select>
+            {@render fromFile("time_style")}
+          </label>
+          <label class="pf"><span class="pl">Clock</span>
+            <select value={app.prefs.time_format} disabled={locked("time_format") || app.prefs.time_style !== "absolute"} onchange={(e) => setPrefs({ time_format: e.currentTarget.value as typeof app.prefs.time_format })}>
+              <option value="system">System</option>
+              <option value="12">12 hour</option>
+              <option value="24">24 hour</option>
+            </select>
+            {@render fromFile("time_format")}
+          </label>
+          <label class="pf ck"><input type="checkbox" checked={app.prefs.expand_merge_commits_by_default} disabled={locked("expand_merge_commits_by_default")} onchange={(e) => setPrefs({ expand_merge_commits_by_default: e.currentTarget.checked })} /> Expand merge commits by default <span class="hint">(off: merges start collapsed in the commit graph; applies when a repository loads)</span> {@render fromFile("expand_merge_commits_by_default")}</label>
         {:else if page.id === "diff"}
           <div class="pf"><span class="pl">Diff style</span>
             <div class="seg two" role="radiogroup" aria-label="Diff style">
@@ -195,7 +231,6 @@
           <label class="pf ck"><input type="checkbox" checked={app.diff.words} disabled={locked("word_diff")} onchange={(e) => setDiff({ words: e.currentTarget.checked })} /> Word diff (highlight the changed words) {@render fromFile("word_diff")}</label>
           <label class="pf ck"><input type="checkbox" checked={app.diff.syntax} disabled={locked("diff_syntax_colors")} onchange={(e) => setDiff({ syntax: e.currentTarget.checked })} /> Syntax colors {@render fromFile("diff_syntax_colors")}</label>
           <label class="pf ck"><input type="checkbox" checked={app.diff.wrap} disabled={locked("word_wrap")} onchange={(e) => setDiff({ wrap: e.currentTarget.checked })} /> Wrap long lines in unified diffs <span class="hint">(side by side always wraps)</span> {@render fromFile("word_wrap")}</label>
-          <label class="pf ck"><input type="checkbox" checked={app.prefs.expand_merge_commits_by_default} disabled={locked("expand_merge_commits_by_default")} onchange={(e) => setPrefs({ expand_merge_commits_by_default: e.currentTarget.checked })} /> Expand merge commits by default <span class="hint">(off: merges start collapsed in the commit graph; applies when a repository loads)</span> {@render fromFile("expand_merge_commits_by_default")}</label>
         {:else if page.id === "repositories"}
           <div class="pf-bar">
             <button class="btn sm" onclick={showAddRepos}>Add Repositories from Folder…</button>

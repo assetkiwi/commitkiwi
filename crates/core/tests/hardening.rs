@@ -77,14 +77,14 @@ fn hardening() {
     let reads = [
         Req::Status { repo: repo.clone() },
         Req::Overview { repo: repo.clone() },
-        Req::Log { repo: repo.clone(), skip: 0, limit: 10, hidden: vec![] },
+        Req::Log { repo: repo.clone(), skip: 0, limit: 10, hidden: vec![], order: Default::default() },
         Req::Show { repo: repo.clone(), oid: head.clone(), from: None },
         Req::Diff { repo: repo.clone(), oid: head.clone(), path: "a.txt".into(), old_path: None, context: 3, ignore_ws: false, from: None },
         Req::WorkDiff { repo: repo.clone(), path: "a.txt".into(), old_path: None, staged: false, untracked: false, conflicted: false, context: 3, ignore_ws: false },
         Req::Blame { repo: repo.clone(), oid: head.clone(), path: "a.txt".into() },
         Req::LineLog { repo: repo.clone(), oid: head.clone(), path: "a.txt".into(), start: 1, end: 1, limit: 10 },
         Req::FileLog { repo: repo.clone(), oid: head.clone(), path: "a.txt".into(), skip: 0, limit: 10 },
-        Req::Search { repo: repo.clone(), query: SearchQuery { content: vec!["two".into()], ..Default::default() }, hidden: vec![], limit: 10 },
+        Req::Search { repo: repo.clone(), query: SearchQuery { content: vec!["two".into()], ..Default::default() }, hidden: vec![], limit: 10, order: Default::default() },
     ];
     for req in reads.clone() {
         let name = format!("{req:?}");

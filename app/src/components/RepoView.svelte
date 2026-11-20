@@ -151,7 +151,7 @@
     notice = "";
     ui.sidebar = true; // the commit list is part of the side bar
     try {
-      const index = await api.locate(tab.location, tab.path, oid, tab.hidden);
+      const index = await api.locate(tab.location, tab.path, oid, tab.hidden, app.prefs.commit_order);
       if (index === null) { notice = tab.hidden.length ? "That commit is not in the graph (it may be on a hidden branch)." : "That commit is not reachable from any branch, tag or remote."; return; }
       if (found && positionOf(found.rows, index) < 0) search = null; // not a result: back to the full list
       pane = "commits";
@@ -176,7 +176,7 @@
     const n = ++searchSeq;
     if (!q || isEmptyQuery(q)) { found = null; searchErr = ""; return; }
     const t = setTimeout(() => {
-      api.search(tab.location, tab.path, forGit(q), hidden).then((r) => {
+      api.search(tab.location, tab.path, forGit(q), hidden, undefined, app.prefs.commit_order).then((r) => {
         if (n !== searchSeq) return;
         found = { rows: Int32Array.from(r.rows), truncated: r.truncated };
         searchErr = "";
@@ -1148,7 +1148,7 @@
         <WorkingDir {tab} status={work} rev={workRev} onchanged={() => refreshWork(true)} bind:focus={workFocus} />
       {:else if view === "stash" && stashSel}
         {#key stashSel.oid}
-          <CommitDetail {tab} stash={stashSel.name} commit={{ oid: stashSel.oid, parents: [], author: "", email: "", time: 0, subject: stashSel.message, files: null, labels: [] }}
+          <CommitDetail {tab} stash={stashSel.name} commit={{ oid: stashSel.oid, parents: [], author: "", email: "", time: 0, ctime: 0, subject: stashSel.message, files: null, labels: [] }}
             onjump={jumpTo} />
         {/key}
       {:else if selected}

@@ -38,5 +38,19 @@ export function fullDate(unix: number): string {
   return `${DAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}, ${d.getFullYear()}, ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
+/** Commit list absolute time, Sublime Merge style: "12:15" today, "Thu, 22:39" this week, "3 Nov" this year,
+ *  "3 Nov 2024" before. `clock`: "system" follows the OS's 12/24 hour setting. */
+export function stamp(unix: number, clock: "system" | "12" | "24" = "system", nowMs: number = Date.now()): string {
+  const d = new Date(unix * 1000), now = new Date(nowMs);
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const time = clock === "24"
+    ? `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
+    : d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", ...(clock === "12" ? { hour12: true } : {}) });
+  if (d.getTime() >= midnight) return time;
+  if (d.getTime() >= midnight - 6 * 864e5) return `${DAYS[d.getDay()]}, ${time}`;
+  const day = `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  return d.getFullYear() === now.getFullYear() ? day : `${day} ${d.getFullYear()}`;
+}
+
 /** A merge message without git's `#` comment lines (what `git commit` would strip when editing it). */
 export const stripComments = (msg: string): string => msg.split("\n").filter((l) => !l.startsWith("#")).join("\n").trim();

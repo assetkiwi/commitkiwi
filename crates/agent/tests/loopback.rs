@@ -38,7 +38,7 @@ async fn agent_matches_local() {
         Req::Open { path: p.clone() },
         Req::Count { repo: p.clone(), hidden: vec![] },
         Req::Refs { repo: p.clone() },
-        Req::Log { repo: p.clone(), skip: 1, limit: 3, hidden: vec![] },
+        Req::Log { repo: p.clone(), skip: 1, limit: 3, hidden: vec![], order: Default::default() },
         Req::Open { path: "/definitely/not/here".into() },
     ];
     for req in reqs {
@@ -51,7 +51,7 @@ async fn agent_matches_local() {
     let tasks: Vec<_> = (0..20u32)
         .map(|i| {
             let (r, p) = (remote.clone(), p.clone());
-            tokio::spawn(async move { (i, r.call(Req::Log { repo: p, skip: i % 5, limit: 1, hidden: vec![] }).await.unwrap()) })
+            tokio::spawn(async move { (i, r.call(Req::Log { repo: p, skip: i % 5, limit: 1, hidden: vec![], order: Default::default() }).await.unwrap()) })
         })
         .collect();
     for t in tasks {

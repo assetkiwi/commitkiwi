@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { IN, PASS, type GraphLayout } from "../lib/graph";
+  import { IN, MAX_COL, PASS, laneX as x, type GraphLayout } from "../lib/graph";
 
   let { layout, i, h, w, merge = false, collapsed = false, head = 0 }: {
     layout: GraphLayout | null; i: number; h: number; w: number; merge?: boolean;
@@ -8,8 +8,7 @@
     /** a merge whose merged-in commits are hidden (Left): drawn with a plus */
     collapsed?: boolean;
   } = $props();
-  const MAX_COL = 9; // lanes beyond this share the last column
-  const x = (lane: number) => 12 + Math.min(lane, MAX_COL) * 12;
+
   const mid = $derived(h / 2);
 
   const paths = $derived.by(() => {
@@ -31,12 +30,12 @@
 </script>
 
 <svg class="g" width={w} height={h} aria-hidden="true">
-  {#if head > 0}<path d={head === 1 ? `M12 0V${h}` : `M12 0V${mid}`} stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="3 3" fill="none" />{/if}
+  {#if head > 0}<path d={head === 1 ? `M${x(0)} 0V${h}` : `M${x(0)} 0V${mid}`} stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="3 3" fill="none" />{/if}
   {#each paths as p}<path d={p.d} stroke="var(--lane{p.c})" stroke-width="2" fill="none" />{/each}
   {#if merge}
-    <circle cx={nodeX} cy={mid} r={collapsed ? 6 : 4.5} fill="var(--surface)" stroke="var(--lane{nodeColor})" stroke-width="2" />
-    {#if collapsed}<path class="plus" d="M{nodeX - 3} {mid}h6M{nodeX} {mid - 3}v6" stroke="var(--lane{nodeColor})" stroke-width="1.6" />{/if}
+    <circle cx={nodeX} cy={mid} r={collapsed ? 5 : 3.5} fill="var(--surface)" stroke="var(--lane{nodeColor})" stroke-width="2" />
+    {#if collapsed}<path class="plus" d="M{nodeX - 2.5} {mid}h5M{nodeX} {mid - 2.5}v5" stroke="var(--lane{nodeColor})" stroke-width="1.6" />{/if}
   {:else}
-    <circle cx={nodeX} cy={mid} r="5" fill="var(--lane{nodeColor})" stroke="var(--surface)" stroke-width="2.5" />
+    <circle cx={nodeX} cy={mid} r="4" fill="var(--lane{nodeColor})" stroke="var(--surface)" stroke-width="1.5" />
   {/if}
 </svg>

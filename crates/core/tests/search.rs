@@ -19,7 +19,7 @@ fn commit(dir: &Path, file: &str, body: &str, msg: &str, author: &str, date: &st
 }
 
 fn rows(repo: &str, query: SearchQuery, hidden: &[&str], limit: u32) -> Result<SearchResult, String> {
-    match handle(Req::Search { repo: repo.into(), query, hidden: hidden.iter().map(|s| s.to_string()).collect(), limit }) {
+    match handle(Req::Search { repo: repo.into(), query, hidden: hidden.iter().map(|s| s.to_string()).collect(), limit, order: Default::default() }) {
         Resp::Search(r) => Ok(r),
         Resp::Err(e) => Err(e),
         other => panic!("{other:?}"),
@@ -29,7 +29,7 @@ fn rows(repo: &str, query: SearchQuery, hidden: &[&str], limit: u32) -> Result<S
 /// Subjects of the matching rows, via `Log` (proves the rows index the commit list).
 fn subjects(repo: &str, q: SearchQuery) -> Vec<String> {
     let r = rows(repo, q, &[], 1000).unwrap();
-    let Resp::Log(all) = handle(Req::Log { repo: repo.into(), skip: 0, limit: 100, hidden: vec![] }) else { panic!() };
+    let Resp::Log(all) = handle(Req::Log { repo: repo.into(), skip: 0, limit: 100, hidden: vec![], order: Default::default() }) else { panic!() };
     r.rows.iter().map(|&i| all[i as usize].subject.clone()).collect()
 }
 

@@ -28,9 +28,9 @@ await page.locator(".row .cnt").first().waitFor({ timeout: 3000 });
 
 // --- virtualization: 50k commits, but only a screenful of rows in the DOM
 const total = await page.locator(".list > div").first().evaluate((e) => e.getBoundingClientRect().height);
-assert.ok(total > 50_000 * 56, `spacer covers all commits (${total})`);
+assert.ok(total > 50_000 * 48, `spacer covers all commits (${total})`);
 assert.ok((await page.locator(".row").count()) < 60, "rows are virtualized");
-await page.locator(".list").evaluate((e) => (e.scrollTop = 20_000 * 56));
+await page.locator(".list").evaluate((e) => (e.scrollTop = 20_000 * 48));
 await page.locator("#row-20000 .rb .s").waitFor({ timeout: 3000 }); // page 40 loaded on demand
 await page.locator("#row-20003 .cnt").waitFor({ timeout: 3000 }); // and its counts
 assert.ok((await page.locator(".row").count()) < 60, "still virtualized after jump");
@@ -71,6 +71,15 @@ await page.locator(".diff .ln.del", { hasText: '"php": "^8.1"' }).first().waitFo
 await page.locator(".imgdiff img").first().waitFor(); // logo.png is an image: shown, not "Binary file"
 await page.getByText("Renamed from docs/old-name.md").waitFor();
 assert.match(await page.locator(".kv .stats").innerText(), /^6 files changed: −2 \+26/);
+// ⌘A after clicking in a diff selects that diff's text only, not the commit list or details around it
+await page.locator(".diff .ln.add", { hasText: '"php": "^8.3"' }).first().click();
+await page.keyboard.press("Meta+a");
+const picked = await page.evaluate(() => {
+  const s = getSelection(), box = s.anchorNode && (s.anchorNode.nodeType === 1 ? s.anchorNode : s.anchorNode.parentElement).closest(".diff");
+  return { inDiff: !!box && box.contains(s.focusNode), text: s.toString() };
+});
+assert.ok(picked.inDiff && picked.text.includes('"php": "^8.3"'), "select all stays in the diff");
+await page.evaluate(() => getSelection().removeAllRanges());
 if (shots) await page.screenshot({ path: `${shots}/m2-detail.png` });
 
 // --- collapsing a file hides its diff
@@ -732,20 +741,22 @@ assert.deepEqual((await calls("AddWorktree"))[0].AddWorktree, { repo: "/work/dem
 await page.waitForFunction((n) => globalThis.__mockCalls.filter((c) => c.Count).length > n, counts0); // the tab reloads after a write
 await page.waitForTimeout(150);
 
-// commit rows: HEAD subject bold, lane-coloured pill + `⑂ +N`, text indented by that row's own graph width
+// commit rows: HEAD subject bold, every ref as a lane-coloured pill after the author, text indented by that row's own graph width
 await page.locator(".list").evaluate((el) => { el.scrollTop = 0; }); // a reload keeps the scroll position (it no longer remounts)
 await page.locator("#row-0").click();
 await page.locator("#row-0.sel").waitFor();
 await page.locator("#row-0 .s.headc").waitFor();
 assert.equal(await page.locator("#row-1 .s.headc").count(), 0);
-assert.match(await page.locator("#row-0 .ref").getAttribute("style"), /--lc: var\(--lane\d\)/);
-assert.equal(await page.locator("#row-0 .refmore").innerText(), "⑂ +1");
-assert.equal(await page.locator("#row-1").evaluate((e) => e.style.paddingLeft), "48px");
-assert.equal(await page.locator("#row-10").evaluate((e) => e.style.paddingLeft), "36px");
+assert.match(await page.locator("#row-0 .ref").first().getAttribute("style"), /--lc: var\(--lane\d\)/);
+assert.equal(await page.locator("#row-0 .ref").count(), 2);
+await page.locator("#row-0 .au").waitFor();
+await page.locator("#row-0 .when").waitFor();
+assert.equal(await page.locator("#row-1").evaluate((e) => e.style.paddingLeft), "32px");
+assert.equal(await page.locator("#row-10").evaluate((e) => e.style.paddingLeft), "22px");
 // ← collapses the merge (its side branch rows 1-5 go), → expands it
 await page.keyboard.press("ArrowLeft");
 await page.locator("#row-1").waitFor({ state: "detached" });
-assert.equal(await page.locator("#row-6").evaluate((e) => e.style.top), "60px", "row 6 moves up to position 1");
+assert.equal(await page.locator("#row-6").evaluate((e) => e.style.top), "52px", "row 6 moves up to position 1");
 await page.locator("#row-0 path.plus").waitFor({ state: "attached" });
 await page.keyboard.press("ArrowRight");
 await page.locator("#row-1").waitFor();

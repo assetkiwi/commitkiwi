@@ -16,8 +16,10 @@ export interface GraphData { parents: number[][]; tips: number[]; head?: number 
 export interface Worktree { path: string; branch: string | null; oid: string; current: boolean; locked: boolean }
 export interface Refs { refs: RefItem[]; stashes: Stash[]; submodules: Submodule[]; worktrees: Worktree[]; remotes: string[] }
 export interface Label { name: string; kind: RefKind; head: boolean }
+/** Commit list order (crates/protocol Order). */
+export type Order = "topo" | "date" | "author_date";
 export interface Commit {
-  oid: string; parents: string[]; author: string; email: string; time: number;
+  oid: string; parents: string[]; author: string; email: string; time: number; ctime: number;
   subject: string; files: number | null; labels: Label[];
 }
 export type Req =
@@ -25,10 +27,10 @@ export type Req =
   | { Open: { path: string } }
   | { Refs: { repo: string } }
   | { Count: { repo: string; hidden: string[] } }
-  | { Log: { repo: string; skip: number; limit: number; hidden: string[] } }
+  | { Log: { repo: string; skip: number; limit: number; hidden: string[]; order?: Order } }
   | { Stats: { repo: string; oids: string[] } }
-  | { Graph: { repo: string; hidden: string[] } }
-  | { Locate: { repo: string; oid: string; hidden: string[] } }
+  | { Graph: { repo: string; hidden: string[]; order?: Order } }
+  | { Locate: { repo: string; oid: string; hidden: string[]; order?: Order } }
   | { Show: { repo: string; oid: string; from: string | null } }
   | { Diff: { repo: string; oid: string; path: string; old_path: string | null; context: number; ignore_ws: boolean; from: string | null } }
   | { LineLog: { repo: string; oid: string; path: string; start: number; end: number; limit: number } }
@@ -66,7 +68,7 @@ export type Req =
   | { UpdateSubmodules: { repo: string; init: boolean; path?: string | null } }
   | { SyncSubmodules: { repo: string; path?: string | null } }
   | { ScanRepos: { root: string; depth: number } }
-  | { Search: { repo: string; query: SearchQuery; hidden: string[]; limit: number } }
+  | { Search: { repo: string; query: SearchQuery; hidden: string[]; limit: number; order?: Order } }
   /** a write as console job `job`; its output arrives as `job-output` events */
   | { Job: { job: number; req: Req } }
   | { Cancel: { job: number } }

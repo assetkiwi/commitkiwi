@@ -45,6 +45,14 @@ fn revs(repo: &str, hidden: &[String]) -> Result<Vec<String>, String> {
 }
 
 /// `base` followed by the revs, as the `&[&str]` that `git` takes.
+fn order_flag(order: Order) -> &'static str {
+    match order {
+        Order::Topo => "--topo-order",
+        Order::Date => "--date-order",
+        Order::AuthorDate => "--author-date-order",
+    }
+}
+
 fn with_revs<'a>(base: &[&'a str], revs: &'a [String]) -> Vec<&'a str> {
     base.iter().copied().chain(revs.iter().map(String::as_str)).collect()
 }
@@ -185,10 +193,10 @@ fn run(req: Req) -> Result<Resp, String> {
         Req::Open { path } => Resp::Repo(open(&path)?),
         Req::Refs { repo } => Resp::Refs(refs(&repo)?),
         Req::Count { repo, hidden } => Resp::Count(count(&repo, &revs(&repo, &hidden)?)?),
-        Req::Log { repo, skip, limit, hidden } => Resp::Log(log(&repo, skip, limit.min(MAX_PAGE), &revs(&repo, &hidden)?)?),
+        Req::Log { repo, skip, limit, hidden, order } => Resp::Log(log(&repo, skip, limit.min(MAX_PAGE), order, &revs(&repo, &hidden)?)?),
         Req::Stats { repo, oids } => Resp::Stats(stats(&repo, &oids)?),
-        Req::Graph { repo, hidden } => Resp::Graph(graph(&repo, &revs(&repo, &hidden)?)?),
-        Req::Locate { repo, oid, hidden } => Resp::Locate(locate(&repo, &oid, &revs(&repo, &hidden)?)?),
+        Req::Graph { repo, hidden, order } => Resp::Graph(graph(&repo, order, &revs(&repo, &hidden)?)?),
+        Req::Locate { repo, oid, hidden, order } => Resp::Locate(locate(&repo, &oid, order, &revs(&repo, &hidden)?)?),
         Req::Show { repo, oid, from } => Resp::Show(show(&repo, &oid, from.as_deref())?),
         Req::Diff { repo, oid, path, old_path, context, ignore_ws, from } => {
             Resp::Diff(diff(&repo, &oid, &path, old_path.as_deref(), (context, ignore_ws), from.as_deref())?)
@@ -244,7 +252,7 @@ fn run(req: Req) -> Result<Resp, String> {
         }
         Req::SyncSubmodules { repo, path } => done(git_out(&repo, &with_submodule(&repo, vec!["submodule", "sync", "--recursive"], path.as_deref())?).map(|_| ()))?,
         Req::ScanRepos { root, depth } => Resp::Scan(scan_repos(&root, depth)?),
-        Req::Search { repo, query, hidden, limit } => Resp::Search(search(&repo, &query, limit, &revs(&repo, &hidden)?)?),
+        Req::Search { repo, query, hidden, limit, order } => Resp::Search(search(&repo, &query, limit, order, &revs(&repo, &hidden)?)?),
         Req::CreateBranch { repo, name, from, checkout } => done(create_branch(&repo, &name, from.as_deref(), checkout))?,
         Req::RenameBranch { repo, branch, name } => {
             let (old, new) = (local_branch(&repo, &branch)?, ref_name(&repo, "refs/heads/", &name)?);
@@ -767,13 +775,13 @@ fn parse_submodules(out: &str) -> Vec<Submodule> {
         .collect()
 }
 
-fn log(repo: &str, skip: u32, limit: u32, revs: &[String]) -> Result<Vec<Commit>, String> {
+fn log(repo: &str, skip: u32, limit: u32, order: Order, revs: &[String]) -> Result<Vec<Commit>, String> {
     if limit == 0 {
         return Ok(vec![]);
     }
-    let fmt = format!("--format={RECORD}%H{FIELD}%P{FIELD}%an{FIELD}%ae{FIELD}%at{FIELD}%s{FIELD}%D");
+    let fmt = format!("--format={RECORD}%H{FIELD}%P{FIELD}%an{FIELD}%ae{FIELD}%at{FIELD}%ct{FIELD}%s{FIELD}%D");
     let (skip, max) = (format!("--skip={skip}"), format!("--max-count={limit}"));
-    let opts = ["--topo-order", "--decorate=full", "--no-show-signature", "--no-ext-diff", "--no-textconv", &skip, &max, &fmt];
+    let opts = [order_flag(order), "--decorate=full", "--no-show-signature", "--no-ext-diff", "--no-textconv", &skip, &max, &fmt];
     let out = git(repo, &with_revs(&["log"], revs).into_iter().chain(opts).collect::<Vec<_>>())?;
     Ok(parse_log(&out))
 }
@@ -783,14 +791,15 @@ fn parse_log(out: &str) -> Vec<Commit> {
         .skip(1)
         .filter_map(|rec| {
             let mut f = rec.trim_end().split(FIELD);
-            let (oid, parents, author, email, time, subject, deco) =
-                (f.next()?, f.next()?, f.next()?, f.next()?, f.next()?, f.next()?, f.next()?);
+            let (oid, parents, author, email, time, ctime, subject, deco) =
+                (f.next()?, f.next()?, f.next()?, f.next()?, f.next()?, f.next()?, f.next()?, f.next()?);
             Some(Commit {
                 oid: oid.into(),
                 parents: parents.split_whitespace().map(String::from).collect(),
                 author: author.into(),
                 email: email.into(),
                 time: time.parse().unwrap_or(0),
+                ctime: ctime.parse().unwrap_or(0),
                 subject: subject.into(),
                 files: None,
                 labels: parse_decorations(deco),
@@ -861,9 +870,9 @@ fn parse_decorations(d: &str) -> Vec<Label> {
 
 // ---- M2: graph, commit detail, diffs, files, history, blame -------------------------------------
 
-/// Parent row indices per commit, in the same order as `log` (topo order: parents always come later).
-fn graph(repo: &str, revs: &[String]) -> Result<GraphData, String> {
-    let out = git(repo, &with_revs(&["rev-list", "--topo-order", "--parents"], revs))?;
+/// Parent row indices per commit, in the same order as `log` (every order puts parents after their children).
+fn graph(repo: &str, order: Order, revs: &[String]) -> Result<GraphData, String> {
+    let out = git(repo, &with_revs(&["rev-list", order_flag(order), "--parents"], revs))?;
     let lines: Vec<&str> = out.lines().collect();
     let row: HashMap<&str, u32> =
         lines.iter().enumerate().map(|(i, l)| (l.split(' ').next().unwrap_or(""), i as u32)).collect();
@@ -883,9 +892,9 @@ fn graph(repo: &str, revs: &[String]) -> Result<GraphData, String> {
     Ok(GraphData { parents, tips, head })
 }
 
-fn locate(repo: &str, oid: &str, revs: &[String]) -> Result<Option<u32>, String> {
+fn locate(repo: &str, oid: &str, order: Order, revs: &[String]) -> Result<Option<u32>, String> {
     check_oid(oid)?;
-    let out = git(repo, &with_revs(&["rev-list", "--topo-order"], revs))?;
+    let out = git(repo, &with_revs(&["rev-list", order_flag(order)], revs))?;
     Ok(out.lines().position(|l| l == oid).map(|p| p as u32))
 }
 
@@ -1077,7 +1086,7 @@ fn file_log(repo: &str, oid: &str, path: &str, skip: u32, limit: u32) -> Result<
     if limit == 0 {
         return Ok(vec![]);
     }
-    let fmt = format!("--format={RECORD}%H{FIELD}%P{FIELD}%an{FIELD}%ae{FIELD}%at{FIELD}%s{FIELD}%D");
+    let fmt = format!("--format={RECORD}%H{FIELD}%P{FIELD}%an{FIELD}%ae{FIELD}%at{FIELD}%ct{FIELD}%s{FIELD}%D");
     let (skip, max) = (format!("--skip={skip}"), format!("--max-count={limit}"));
     let out = git(
         repo,
@@ -1121,7 +1130,7 @@ fn line_log(repo: &str, oid: &str, path: &str, start: u32, end: u32, limit: u32)
     if limit == 0 {
         return Ok(vec![]);
     }
-    let fmt = format!("--format={RECORD}%H{FIELD}%P{FIELD}%an{FIELD}%ae{FIELD}%at{FIELD}%s{FIELD}%D");
+    let fmt = format!("--format={RECORD}%H{FIELD}%P{FIELD}%an{FIELD}%ae{FIELD}%at{FIELD}%ct{FIELD}%s{FIELD}%D");
     let range = format!("-L{start},{end}:{path}");
     let max = format!("--max-count={limit}");
     // `-L` normally prints a patch; --no-patch keeps just the commits. The range is matched against `oid`'s version of the file.
@@ -1160,7 +1169,7 @@ const MAX_SEARCH: u32 = 1000;
 
 /// git does dates, paths and `-S`; text filters run here on the streamed log, so every filter ANDs the same way
 /// and no user text is ever read by git as an option or a pattern. Stops reading once `limit` matched.
-fn search(repo: &str, q: &SearchQuery, limit: u32, revs: &[String]) -> Result<SearchResult, String> {
+fn search(repo: &str, q: &SearchQuery, limit: u32, order: Order, revs: &[String]) -> Result<SearchResult, String> {
     let limit = limit.clamp(1, MAX_SEARCH) as usize;
     let lower = |v: &[String]| v.iter().map(|s| s.to_lowercase()).collect::<Vec<_>>();
     let (text, message, author, commit) = (lower(&q.text), lower(&q.message), lower(&q.author), lower(&q.commit));
@@ -1231,7 +1240,7 @@ fn search(repo: &str, q: &SearchQuery, limit: u32, revs: &[String]) -> Result<Se
         return Err(String::from_utf8_lossy(&done.stderr).trim().to_string());
     }
     // rows in the commit list's order (the graph's), so the UI can show just these
-    let order = git(repo, &with_revs(&["rev-list", "--topo-order"], revs))?;
+    let order = git(repo, &with_revs(&["rev-list", order_flag(order)], revs))?;
     let want: std::collections::HashSet<&str> = found.iter().map(String::as_str).collect();
     let rows = order.lines().enumerate().filter(|(_, l)| want.contains(l)).map(|(i, _)| i as u32).collect();
     Ok(SearchResult { rows, truncated })
@@ -2443,12 +2452,12 @@ mod tests {
     #[test]
     fn log_and_stats_parse() {
         let raw = format!(
-            "{r}aaa{f}p1 p2{f}A{f}a@x{f}10{f}merge{f}\n{r}bbb{f}p1{f}B{f}b@x{f}9{f}one{f}HEAD -> refs/heads/m\n",
+            "{r}aaa{f}p1 p2{f}A{f}a@x{f}10{f}11{f}merge{f}\n{r}bbb{f}p1{f}B{f}b@x{f}9{f}9{f}one{f}HEAD -> refs/heads/m\n",
             r = RECORD,
             f = FIELD
         );
         let c = parse_log(&raw);
-        assert_eq!((c.len(), c[0].parents.len(), c[0].files), (2, 2, None));
+        assert_eq!((c.len(), c[0].parents.len(), c[0].files, c[0].ctime, &*c[1].subject), (2, 2, None, 11, "one"));
         assert!(c[1].labels[0].head);
 
         let st = format!("{r}aaa\n{r}bbb\n\n 2 files changed, 3 insertions(+)\n", r = RECORD);

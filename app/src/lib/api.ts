@@ -5,7 +5,7 @@ import type { SearchQuery } from "./search";
 import type { SearchModelInput } from "./nlSearch";
 import type { Moved, UndoMode } from "./journal";
 import type { Cleanup } from "./cleanup";
-import type { BlameLine, Blob, Commit, ConflictFile, Detail, ForgeInfo, GraphData, ImageData, Overview, Patch, Refs, RepoChange, RepoInfo, Req, Scan, SearchResult, Status, TreeEntry, DownloadEvent, ModelInfo, RebasePlan } from "./types";
+import type { BlameLine, Blob, Commit, ConflictFile, Detail, ForgeInfo, GraphData, ImageData, Order, Overview, Patch, Refs, RepoChange, RepoInfo, Req, Scan, SearchResult, Status, TreeEntry, DownloadEvent, ModelInfo, RebasePlan } from "./types";
 
 // Outside Tauri (plain browser: UI dev, screenshots, tests) a mock backend answers instead.
 export const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -62,16 +62,17 @@ export const api = {
   refs: async (loc: string, repo: string): Promise<Refs> => (await rpc(loc, { Refs: { repo } })).Refs,
   /** `hidden`: full ref names left out of the commit list (Tab.hidden) */
   count: async (loc: string, repo: string, hidden: string[]): Promise<number> => (await rpc(loc, { Count: { repo, hidden } })).Count,
-  log: async (loc: string, repo: string, skip: number, limit: number, hidden: string[]): Promise<Commit[]> =>
-    (await rpc(loc, { Log: { repo, skip, limit, hidden } })).Log,
-  search: async (loc: string, repo: string, query: SearchQuery, hidden: string[], limit = 1000): Promise<SearchResult> =>
-    (await rpc(loc, { Search: { repo, query, hidden, limit } })).Search,
+  /** `order`: the commit list's (Prefs.commit_order); log, graph, locate and search rows only line up in the same one */
+  log: async (loc: string, repo: string, skip: number, limit: number, hidden: string[], order: Order = "topo"): Promise<Commit[]> =>
+    (await rpc(loc, { Log: { repo, skip, limit, hidden, order } })).Log,
+  search: async (loc: string, repo: string, query: SearchQuery, hidden: string[], limit = 1000, order: Order = "topo"): Promise<SearchResult> =>
+    (await rpc(loc, { Search: { repo, query, hidden, limit, order } })).Search,
   stats: async (loc: string, repo: string, oids: string[]): Promise<[string, number][]> =>
     (await rpc(loc, { Stats: { repo, oids } })).Stats,
 
-  graph: async (loc: string, repo: string, hidden: string[]): Promise<GraphData> => (await rpc(loc, { Graph: { repo, hidden } })).Graph,
-  locate: async (loc: string, repo: string, oid: string, hidden: string[]): Promise<number | null> =>
-    (await rpc(loc, { Locate: { repo, oid, hidden } })).Locate,
+  graph: async (loc: string, repo: string, hidden: string[], order: Order = "topo"): Promise<GraphData> => (await rpc(loc, { Graph: { repo, hidden, order } })).Graph,
+  locate: async (loc: string, repo: string, oid: string, hidden: string[], order: Order = "topo"): Promise<number | null> =>
+    (await rpc(loc, { Locate: { repo, oid, hidden, order } })).Locate,
   /** `from`: diff from that commit's first parent instead (a multi-selection's combined change) */
   show: async (loc: string, repo: string, oid: string, from: string | null = null): Promise<Detail> => (await rpc(loc, { Show: { repo, oid, from } })).Show,
   diff: async (loc: string, repo: string, oid: string, path: string, old_path: string | null, context = 3, ignore_ws = false, from: string | null = null): Promise<Patch> =>
