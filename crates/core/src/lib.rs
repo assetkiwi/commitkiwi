@@ -879,7 +879,8 @@ fn graph(repo: &str, revs: &[String]) -> Result<GraphData, String> {
         .collect();
     tips.sort_unstable();
     tips.dedup();
-    Ok(GraphData { parents, tips })
+    let head = row.get(head.trim()).copied();
+    Ok(GraphData { parents, tips, head })
 }
 
 fn locate(repo: &str, oid: &str, revs: &[String]) -> Result<Option<u32>, String> {

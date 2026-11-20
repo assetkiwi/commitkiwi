@@ -54,3 +54,19 @@ test("row width follows the lanes that row draws", () => {
   const lin = layoutGraph([[1], []]);
   assert.equal(rowMaxLane(lin, 0), 0);
 });
+
+test("HEAD's first-parent line keeps lane 0, rows above it stay off lane 0", () => {
+  // 0: other tip -> 2; 1: HEAD = merge(2, 3); 2 -> 4; 3 -> 4; 4 root
+  const g = layoutGraph([[2], [2, 3], [4], [4], []], 1);
+  assert.equal(g.nodeLane[0], 1, "a newer branch above HEAD stays off lane 0");
+  assert.deepEqual([1, 2, 4].map((r) => g.nodeLane[r]), [0, 0, 0], "HEAD and its first parents run down lane 0");
+  assert.notEqual(g.nodeLane[3], 0, "the merged-in commit sits beside the trunk");
+  assert.deepEqual(rowEdges(g, 2).filter((e) => e[2] === IN).map((e) => [e[0], e[1]]).sort(), [[0, 0], [1, 0]], "the newer branch joins the trunk at row 2");
+  for (let i = 0; i < 1; i++) for (const e of rowEdges(g, i)) assert.ok(e[0] > 0 && e[1] > 0, "nothing above HEAD touches lane 0");
+});
+
+test("without a head the layout is unchanged", () => {
+  const p = [[2], [2, 3], [4], [4], []];
+  assert.deepEqual(layoutGraph(p), layoutGraph(p, -1));
+  assert.deepEqual(Array.from(layoutGraph(p, 0).nodeLane), Array.from(layoutGraph(p).nodeLane), "HEAD on top already takes lane 0");
+});

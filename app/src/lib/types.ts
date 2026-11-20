@@ -12,7 +12,7 @@ export interface RefItem { name: string; kind: RefKind; oid: string; head: boole
 export interface Stash { name: string; oid: string; message: string }
 export interface Submodule { path: string; oid: string; initialized: boolean }
 /** `Graph` response: parent rows per commit, and the rows refs point at */
-export interface GraphData { parents: number[][]; tips: number[] }
+export interface GraphData { parents: number[][]; tips: number[]; head?: number | null }
 export interface Worktree { path: string; branch: string | null; oid: string; current: boolean; locked: boolean }
 export interface Refs { refs: RefItem[]; stashes: Stash[]; submodules: Submodule[]; worktrees: Worktree[]; remotes: string[] }
 export interface Label { name: string; kind: RefKind; head: boolean }

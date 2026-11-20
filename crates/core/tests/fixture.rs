@@ -96,8 +96,9 @@ fn fixture_repo() {
 
     // ---- M2 on the 6-commit history: graph, locate, show, tree, blob, diff
     let rq = |req: Req| handle(req);
-    let Resp::Graph(GraphData { parents: g, tips }) = rq(Req::Graph { repo: repo.into(), hidden: vec![] }) else { panic!() };
+    let Resp::Graph(GraphData { parents: g, tips, head }) = rq(Req::Graph { repo: repo.into(), hidden: vec![] }) else { panic!() };
     assert!(tips.contains(&0), "HEAD's row is a tip");
+    assert_eq!(head, Some(0), "HEAD's row");
     let c_row = all.iter().position(|c| c.subject == "c").unwrap() as u32;
     assert!(tips.contains(&c_row), "the merged `feature` branch still points at c");
     assert_eq!(g.len(), 6);

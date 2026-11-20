@@ -51,6 +51,8 @@
   let layout = $state.raw<GraphLayout | null>(null);
   /** list position -> row in git's order, while collapsed merges hide rows (null: every row is listed) */
   let shown = $state.raw<Int32Array | null>(null);
+  /** HEAD's list position: its branch keeps lane 0, and rows above it draw a dashed line there to the changes row */
+  let headPos = $state(-1);
   // selection, as real rows: `cursor` moves with the keys, `picked` is sorted (newest first)
   let cursor = $state(0);
   let picked = $state.raw<number[]>([0]);
@@ -72,10 +74,12 @@
   /** Recompute the listed rows and lanes after the graph arrives or a merge is collapsed/expanded. */
   function rebuild() {
     const g = cache.graph;
+    headPos = -1;
     if (filter) { shown = filter; layout = g && layoutGraph(remapParents(g.parents, filter)); return; } // lanes between results only
     if (!g) { shown = null; return; }
     shown = visibleRows(g.parents, g.tips, cache.collapsed);
-    cache.layout = layout = layoutGraph(shown ? remapParents(g.parents, shown) : g.parents);
+    headPos = g.head == null ? -1 : posOf(g.head);
+    cache.layout = layout = layoutGraph(shown ? remapParents(g.parents, shown) : g.parents, headPos);
   }
 
   onMount(() => {
@@ -86,7 +90,7 @@
     el.scrollTop = cache.scrollTop; // coming back to a tab keeps its place
     if (cache.graph) {
       if (cache.collapsed.size) rebuild();
-      else layout = cache.layout;
+      else { layout = cache.layout; headPos = cache.graph.head ?? -1; }
     } else {
       // Lanes need every commit's parents, fetched once (a few hundred KB even for 100k commits).
       api.graph(tab.location, tab.path, tab.hidden).then((g) => {
@@ -320,7 +324,7 @@
     {@const w = rowWidth(v)}
     {@const sel = active && isPicked.has(i)}
     <div id="row-{i}" class="row" class:sel class:multi={sel && picked.length > 1} style:top="{v * ROW + 4}px" style:padding-left="{w}px" role="option" aria-selected={sel} tabindex="-1" onclick={(e) => pick(i, e)} oncontextmenu={(e) => context(e, i)} onkeydown={() => {}}>
-      <GraphCell {layout} i={v} h={ROW} {w} merge={!!c && c.parents.length > 1} collapsed={!!layout && cache.collapsed.has(i)} /><!-- `layout` is replaced on every collapse, so this re-evaluates -->
+      <GraphCell {layout} i={v} h={ROW} {w} head={v < headPos ? 1 : v === headPos && v > 0 ? 2 : 0} merge={!!c && c.parents.length > 1} collapsed={!!layout && cache.collapsed.has(i)} /><!-- `layout` is replaced on every collapse, so this re-evaluates -->
       {#if c}
         {@const [ticket, rest] = splitTicket(c.subject)}
         {@const n = filesOf(c.oid, version)}

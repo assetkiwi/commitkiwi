@@ -18,8 +18,12 @@ export interface GraphLayout {
 
 const FREE = -1;
 
-export function layoutGraph(parents: number[][]): GraphLayout {
+/** `head`: HEAD's row. It and its first-parent ancestors keep lane 0 (rows above it never use lane 0), so the
+ *  current branch is the leftmost straight line and whatever was merged into it curves into that line. */
+export function layoutGraph(parents: number[][], head = -1): GraphLayout {
   const n = parents.length;
+  const trunk = new Set<number>();
+  for (let r = head; r >= 0 && r < n && !trunk.has(r); r = parents[r][0] ?? -1) trunk.add(r);
   const lanes: number[] = []; // lane -> row it is waiting for, or FREE
   const laneColor: number[] = [];
   let nextColor = 0;
@@ -33,20 +37,27 @@ export function layoutGraph(parents: number[][]): GraphLayout {
     edges.push(a, b, type, color);
     maxLane = Math.max(maxLane, a, b);
   };
+  let row = 0;
   const alloc = (): number => {
-    let k = lanes.indexOf(FREE);
+    const reserved = row < head; // lane 0 waits for HEAD
+    if (reserved && !lanes.length) { lanes.push(FREE); laneColor.push(0); }
+    let k = lanes.indexOf(FREE, reserved ? 1 : 0);
     if (k < 0) { k = lanes.length; lanes.push(FREE); laneColor.push(0); }
     return k;
   };
   const freshColor = () => nextColor++ % LANE_COLORS;
 
   for (let i = 0; i < n; i++) {
+    row = i;
     start[i] = edges.length / 4;
     const waiting: number[] = [];
     for (let l = 0; l < lanes.length; l++) if (lanes[l] === i) waiting.push(l);
 
     let nl: number, nc: number;
-    if (waiting.length) { nl = waiting[0]; nc = laneColor[nl]; }
+    if (trunk.has(i)) { // lanes waiting elsewhere merge into lane 0 here
+      if (!lanes.length) { lanes.push(FREE); laneColor.push(0); }
+      nl = 0; nc = lanes[0] === i ? laneColor[0] : waiting.length ? laneColor[waiting[0]] : freshColor(); laneColor[0] = nc;
+    } else if (waiting.length) { nl = waiting[0]; nc = laneColor[nl]; }
     else { nl = alloc(); nc = freshColor(); laneColor[nl] = nc; } // a branch tip starts a new lane
 
     for (let l = 0; l < lanes.length; l++) {
@@ -58,7 +69,8 @@ export function layoutGraph(parents: number[][]): GraphLayout {
 
     parents[i].forEach((p, idx) => {
       const existing = lanes.indexOf(p); // another child already waits for p: join its lane
-      if (existing >= 0) push(nl, existing, OUT, laneColor[existing]);
+      if (idx === 0 && nl === 0 && trunk.has(p)) { lanes[0] = p; push(0, 0, OUT, nc); } // the trunk goes on in lane 0
+      else if (existing >= 0) push(nl, existing, OUT, laneColor[existing]);
       else if (idx === 0) { lanes[nl] = p; laneColor[nl] = nc; push(nl, nl, OUT, nc); }
       else { const k = alloc(); const c = freshColor(); lanes[k] = p; laneColor[k] = c; push(nl, k, OUT, c); }
     });

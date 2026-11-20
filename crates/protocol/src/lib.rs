@@ -677,6 +677,9 @@ pub struct GraphData {
     pub parents: Vec<Vec<u32>>,
     /// Rows a listed ref or HEAD points at (they stay visible when merges are collapsed).
     pub tips: Vec<u32>,
+    /// HEAD's row (none when HEAD is unborn or hidden).
+    #[serde(default)]
+    pub head: Option<u32>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -925,8 +928,8 @@ mod tests {
         let req: Req = serde_json::from_str(r#"{"FileLog":{"repo":"r","oid":"o","path":"a","skip":0,"limit":100}}"#).unwrap();
         assert!(matches!(req, Req::FileLog { limit: 100, .. }));
         assert_eq!(
-            serde_json::to_value(Resp::Graph(GraphData { parents: vec![vec![1, 2], vec![]], tips: vec![0] })).unwrap(),
-            serde_json::json!({"Graph": {"parents": [[1, 2], []], "tips": [0]}})
+            serde_json::to_value(Resp::Graph(GraphData { parents: vec![vec![1, 2], vec![]], tips: vec![0], head: Some(0) })).unwrap(),
+            serde_json::json!({"Graph": {"parents": [[1, 2], []], "tips": [0], "head": 0}})
         );
         assert_eq!(serde_json::to_value(Resp::Locate(None)).unwrap(), serde_json::json!({"Locate": null}));
         let d = Detail {

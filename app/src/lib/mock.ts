@@ -323,7 +323,7 @@ export async function mockRpc(location: string, req: Req): Promise<any> {
     return { Search: { rows: rows.slice(0, limit), truncated: rows.length > limit } };
   }
   if ("Stats" in req) return { Stats: req.Stats.oids.map((o) => [o, 1 + ((index(o) * 13) % 20)]) };
-  if ("Graph" in req) return { Graph: { parents: Array.from({ length: N }, (_, i) => parentsOf(i)), tips: [0, 12, 40, 300, 900] } };
+  if ("Graph" in req) return { Graph: { parents: Array.from({ length: N }, (_, i) => parentsOf(i)), tips: [0, 12, 40, 300, 900], head: 0 } };
   if ("Locate" in req) { const i = index(req.Locate.oid); return { Locate: i < N ? i : null }; }
   if ("Show" in req) {
     if (req.Show.from) w.__mockCalls.push(req);
