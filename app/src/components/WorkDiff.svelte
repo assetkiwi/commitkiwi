@@ -115,7 +115,9 @@
 </script>
 
 {#snippet buttons(h: number)}
-  {#if !readonly}
+  {#if readonly && app.diff.ignoreWs && !untracked && !conflicted}
+    <span class="hint" data-testid="ws-hint">Hunk and line staging is off while whitespace is ignored</span>
+  {:else if !readonly}
     {#if touches(h)}
       {#if !staged}
         {#if confirming}

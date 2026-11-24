@@ -145,7 +145,8 @@ fn file_line(f: &FileChange) -> String {
     }
 }
 
-/// GBNF for the answer: the first line (≤ 72 characters) and an optional bullet list as the body.
+/// GBNF for the answer: the first line and an optional bullet list as the body. The prompt asks for ≤ 72 (90) characters;
+/// the cap here is looser, because a model that overshoots must finish its sentence, not be cut mid-phrase.
 pub fn grammar(style: Style) -> String {
     let body = r#"body ::= "\n\n" bullet ("\n" bullet){0,5}
 bullet ::= "- " [^\n]{4,100}
@@ -153,10 +154,10 @@ bullet ::= "- " [^\n]{4,100}
     match style {
         Style::Conventional => {
             let types = TYPES.iter().map(|t| format!("\"{t}\"")).collect::<Vec<_>>().join(" | ");
-            format!("root ::= type scope? \"!\"? \": \" subject body?\ntype ::= {types}\nscope ::= \"(\" [a-z0-9_./-]{{1,24}} \")\"\nsubject ::= [^\\n]{{8,72}}\n{body}")
+            format!("root ::= type scope? \"!\"? \": \" subject body?\ntype ::= {types}\nscope ::= \"(\" [a-z0-9_./-]{{1,24}} \")\"\nsubject ::= [^\\n]{{8,110}}\n{body}")
         }
         // another habit: any first line, but still one line of sane length
-        Style::Mimic => format!("root ::= subject body?\nsubject ::= [^\\n-] [^\\n]{{7,89}}\n{body}"),
+        Style::Mimic => format!("root ::= subject body?\nsubject ::= [^\\n-] [^\\n]{{7,119}}\n{body}"),
     }
 }
 
@@ -328,7 +329,7 @@ mod tests {
         assert!(user.contains("### src/Service/UserService.php\n@@ -1 +1 @@") && user.ends_with("Write the commit message."));
         // code before tests in the file list
         assert!(user.find("- src/Service/UserService.php").unwrap() < user.find("- tests/UserServiceTest.php").unwrap());
-        assert!(p.grammar.contains("type ::= \"feat\"") && p.grammar.contains("subject ::= [^\\n]{8,72}"));
+        assert!(p.grammar.contains("type ::= \"feat\"") && p.grammar.contains("subject ::= [^\\n]{8,110}"));
         // a repository with its own habit is mimicked, and the grammar no longer forces a type
         let own = Input { recent: subjects(&["[PROJ-6]: One", "[PROJ-5]: Two", "[PROJ-4]: Three"]), ..Default::default() };
         let m = build(&own);
