@@ -170,7 +170,7 @@ assert.deepEqual(await open(row(0)), [
   "Find Commits on feature/d11-upgrade-C…", "Copy Branch Name", "-",
   "Delete origin/feature/d11-upgrade-C", "Copy Branch Name", "-",
   "Check Out This Commit", "New ›", "-", "Cherry-pick 00000000…", "Revert 00000000", "Rebase Interactively from Here…", "Rewrite History ›", "Reset feature/d11-upgrade-C to Here ›", "-",
-  "Copy Commit Hash", "-", "Hide Branches on This Commit", "Show Only Branches on This Commit", "Show All Branches",
+  "Copy Commit Hash", "Copy as Patch", "Save as Patch…", "-", "Hide Branches on This Commit", "Show Only Branches on This Commit", "Show All Branches",
 ]);
 if (shots) await page.screenshot({ path: `${shots}/f8-commit.png` });
 await entry("Rewrite History").hover();
@@ -201,7 +201,7 @@ await row(2).click();
 await row(4).click({ modifiers: ["Shift"] });
 assert.deepEqual(await open(row(3)), [
   "Check Out This Commit", "New ›", "-", "Cherry-pick Selected Commits", "Revert Selected Commits", "Rewrite History ›", "Reset feature/d11-upgrade-C to Here ›", "-",
-  "Copy Commit Hash", "-", "Show All Branches",
+  "Copy Commit Hash", "Copy Selected as Patch", "Save Selected as Patch…", "-", "Show All Branches",
 ]);
 const nPick = await count("CherryPick");
 await pick("Cherry-pick Selected Commits");

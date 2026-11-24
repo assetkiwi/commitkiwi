@@ -331,6 +331,7 @@ fn run(req: Req) -> Result<Resp, String> {
         }
         Req::ClearStashes { repo } => done(git_out(&repo, &["stash", "clear"]).map(|_| ()))?,
         Req::RemoteUrl { repo, name } => Resp::Text(git(&repo, &["remote", "get-url", "--", remote_name(&repo, &name)?])?.trim().to_string()),
+        Req::Patch { repo, oids } => Resp::Text(patch(&repo, &oids)?),
         Req::Conflict { repo, path } => Resp::Conflict(conflict(&repo, &path)?),
         Req::SaveMerge { repo, path, text, stage } => done(save_merge(&repo, &path, &text, stage))?,
         Req::Rewrite { repo, action, commits, message, published_ok } => done(rewrite(&repo, action, &commits, message.as_deref(), published_ok))?,
@@ -649,6 +650,26 @@ fn valid_oid(o: &str) -> bool {
 /// Ids come from the UI and become git arguments: only accept plain hex ids.
 fn check_oid(o: &str) -> Result<(), String> {
     if valid_oid(o) { Ok(()) } else { Err(format!("not a commit id: {o:?}")) }
+}
+
+fn patch(repo: &str, oids: &[String]) -> Result<String, String> {
+    const MAX_COMMITS: usize = 500;
+    const MAX_BYTES: usize = 64 << 20;
+    oids.iter().try_for_each(|o| check_oid(o))?;
+    if oids.is_empty() { return Err("no commits".into()); }
+    if oids.len() > MAX_COMMITS { return Err(format!("select at most {MAX_COMMITS} commits")); }
+    // the selection comes in any order; `git am` wants oldest first
+    let mut args = vec!["rev-list", "--no-walk=sorted"];
+    args.extend(oids.iter().map(String::as_str));
+    let sorted = git(repo, &args)?;
+    let mut out = String::new();
+    for oid in sorted.lines().rev() {
+        let (bytes, cut) = git_capped(repo, &["format-patch", "--stdout", "-1", oid], MAX_BYTES - out.len(), false)?;
+        if cut { return Err(format!("the patch is larger than {} MB", MAX_BYTES >> 20)); }
+        out += &String::from_utf8_lossy(&bytes);
+    }
+    if out.is_empty() { return Err("merge commits have no patch".into()); }
+    Ok(out)
 }
 
 fn open(path: &str) -> Result<RepoInfo, String> {

@@ -69,7 +69,7 @@ test("commit menu: one commit with its branches; several selected", () => {
     "Find Commits on hotfix/release…", "Copy Branch Name", "-",
     "Delete origin/hotfix/release", "Copy Branch Name", "-",
     "Check Out This Commit", "New", "-", "Cherry-pick 8612d99b…", "Revert 8612d99b", "Rebase Interactively from Here…", "Rewrite History", "Reset hotfix/release to Here", "-",
-    "Copy Commit Hash", "-", "Hide Branches on This Commit", "Show Only Branches on This Commit", "Show All Branches",
+    "Copy Commit Hash", "Copy as Patch", "Save as Patch…", "-", "Hide Branches on This Commit", "Show Only Branches on This Commit", "Show All Branches",
   ]);
   const sub = (n: MenuNode[], c: string) => n.find((x) => x.caption === c)!.children!;
   assert.deepEqual(sub(nodes, "New").map((n) => [n.caption, n.enabled]), [["Branch Here…", true], ["Tag Here…", true]]);
@@ -81,7 +81,7 @@ test("commit menu: one commit with its branches; several selected", () => {
   const multi = resolved(fillMenu(COMMIT, { ...base, multi: true, is_head: false, refs: false, short_commit: "1f6b60ce", commits: ["a", "b"] }));
   assert.deepEqual(multi.nodes.map((n) => n.caption), [
     "Check Out This Commit", "New", "-", "Cherry-pick Selected Commits", "Revert Selected Commits", "Rewrite History", "Reset hotfix/release to Here", "-",
-    "Copy Commit Hash", "-", "Show All Branches",
+    "Copy Commit Hash", "Copy Selected as Patch", "Save Selected as Patch…", "-", "Show All Branches",
   ]);
   const revert = multi.actions[Number(multi.nodes[4].id)];
   assert.deepEqual(revert.args, { commits: ["a", "b"] });

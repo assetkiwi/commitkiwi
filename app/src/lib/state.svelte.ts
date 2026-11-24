@@ -513,7 +513,7 @@ const SETTING_NOTES: Record<string, string> = {
   diff_style: `"split" (side by side) or "unified"`, diff_context_lines: "lines of context around each change",
   ignore_diff_white_space: "hide whitespace-only changes", word_diff: "highlight the changed words",
   diff_syntax_colors: "syntax colours in diffs", word_wrap: "wrap long lines in unified diffs",
-  editor_command: "Open in Editor; {path} is filled in, no shell", editor_command_remote: "the same for remote repositories; {host} too",
+  editor_command: "Open in Editor; {path} is filled in, no shell (macOS: open -a \"Sublime Text\" {path})", editor_command_remote: "the same for remote repositories; {host} too",
   ui_font_size: "interface size in px (13 = 100%)", font_size: "diff and file text in px",
   expand_merge_commits_by_default: "merges start expanded in the commit graph", terminal_command: "Open in Terminal; {path} is the folder",
   confirm_destructive: "ask before discarding, hard resets, force pushes, drops", agent_cleanup_days: "remove remote agents unused this long (0: never)",

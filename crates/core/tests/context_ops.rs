@@ -158,4 +158,18 @@ fn context_ops() {
     err(search("nope", ""));
     err(search("--all", ""));
     err(handle(Req::Search { repo: r(), query: SearchQuery { branch: vec!["main".into(), "side".into()], ..Default::default() }, hidden: vec![], limit: 10, order: Default::default() }));
+
+    // ---- patches: a selection in any order comes out oldest first and applies with `git am`
+    let p1 = commit(dir, "p.txt", "1\n", "patch one");
+    let p2 = commit(dir, "p.txt", "1\n2\n", "patch two");
+    let Resp::Text(mbox) = handle(Req::Patch { repo: r(), oids: vec![p2.clone(), p1.clone()] }) else { panic!() };
+    let (one, two) = (mbox.find("Subject: [PATCH] patch one").unwrap(), mbox.find("Subject: [PATCH] patch two").unwrap());
+    assert!(one < two, "{mbox}");
+    let base = git(dir, &["rev-parse", &format!("{p1}^")]);
+    git(dir, &["checkout", "-q", "--detach", &base]);
+    std::fs::write(t.path().join("x.patch"), &mbox).unwrap();
+    git(dir, &["am", "-q", t.path().join("x.patch").to_str().unwrap()]);
+    assert_eq!(read(dir, "p.txt"), "1\n2\n");
+    err(handle(Req::Patch { repo: r(), oids: vec!["--output=/tmp/x".into()] }));
+    err(handle(Req::Patch { repo: r(), oids: vec![] }));
 }

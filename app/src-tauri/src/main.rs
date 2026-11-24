@@ -282,12 +282,15 @@ fn save_prefs(app: AppHandle, json: String) -> Result<(), String> {
     std::fs::write(&tmp, json).and_then(|_| std::fs::rename(&tmp, &path)).map_err(|e| e.to_string())
 }
 
-/// Split a command template into arguments: whitespace separates, single or double quotes group.
-/// No shell is involved anywhere, so file names substituted later can never inject syntax.
+/// Split a command template into arguments: whitespace separates, single or double quotes group, and a backslash
+/// outside quotes escapes the next character (`Sublime\ Text.app`, as a shell would). No shell is involved anywhere,
+/// so file names substituted later can never inject syntax.
 fn split_args(template: &str) -> Result<Vec<String>, String> {
     let (mut args, mut cur, mut quote, mut started) = (Vec::new(), String::new(), None::<char>, false);
-    for c in template.chars() {
+    let mut chars = template.chars();
+    while let Some(c) = chars.next() {
         match (quote, c) {
+            (None, '\\') => { cur.extend(chars.next()); started = true; }
             (Some(q), c) if c == q => quote = None,
             (Some(_), c) => cur.push(c),
             (None, '\'' | '"') => { quote = Some(c); started = true; }
@@ -304,18 +307,52 @@ fn split_args(template: &str) -> Result<Vec<String>, String> {
 }
 
 /// Open a file in the user's editor. `template` comes from preferences, e.g. `code --remote ssh-remote+{host} {path}`.
+/// A launcher that fails fast (`open -a "No Such App"`, `subl` on a bad path) reports its stderr instead of
+/// vanishing; one still running after a moment is the editor itself and is left to run.
 #[tauri::command]
-fn open_editor(template: String, path: String, host: String) -> Result<(), String> {
+async fn open_editor(template: String, path: String, host: String) -> Result<(), String> {
     let args: Vec<String> = split_args(&template)?.into_iter().map(|a| a.replace("{path}", &path).replace("{host}", &host)).collect();
+    // stderr goes to an unlinked temp file, not a pipe: the editor inherits it, and a pipe would block it when
+    // full or SIGPIPE it once this app quits
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
+    let log = std::env::temp_dir().join(format!("commitkiwi-editor-{}-{nanos}", std::process::id()));
+    let mut err_file = std::fs::OpenOptions::new().read(true).write(true).create_new(true).open(&log).map_err(|e| e.to_string())?;
+    let _ = std::fs::remove_file(&log);
     let mut child = std::process::Command::new(&args[0])
         .args(&args[1..])
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
+        .stderr(err_file.try_clone().map_err(|e| e.to_string())?)
         .spawn()
         .map_err(|e| format!("cannot run `{}`: {e}", args[0]))?;
-    std::thread::spawn(move || { let _ = child.wait(); }); // reap it; the editor outlives this call
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(1500);
+    while std::time::Instant::now() < deadline {
+        match child.try_wait() {
+            Ok(Some(status)) if status.success() => return Ok(()),
+            Ok(Some(status)) => {
+                use std::io::{Read, Seek};
+                let mut err = String::new();
+                let _ = err_file.rewind().and_then(|_| (&mut err_file).take(8192).read_to_string(&mut err));
+                return Err(format!("`{}` failed ({status}): {}", args[0], err.trim()));
+            }
+            Ok(None) => tokio::time::sleep(std::time::Duration::from_millis(50)).await,
+            Err(e) => return Err(e.to_string()),
+        }
+    }
+    std::thread::spawn(move || { let _ = child.wait(); }); // still running: the editor itself; reap it later
     Ok(())
+}
+
+/// Save text the UI made (a commit's patch) where the user picks in the native save dialog. The path comes from
+/// the dialog, never from the UI, so this cannot write anywhere the user did not choose.
+#[tauri::command]
+async fn save_text_as(app: AppHandle, name: String, text: String) -> Result<bool, String> {
+    use tauri_plugin_dialog::DialogExt;
+    // the dialog blocks until closed: off the async workers
+    let picked = tauri::async_runtime::spawn_blocking(move || app.dialog().file().set_file_name(&name).blocking_save_file());
+    let Some(path) = picked.await.map_err(|e| e.to_string())? else { return Ok(false) };
+    std::fs::write(path.into_path().map_err(|e| e.to_string())?, text).map_err(|e| e.to_string())?;
+    Ok(true)
 }
 
 /// Can this build replace itself (the updater)? The macOS app and the Linux AppImage can; a .deb or .rpm install
@@ -328,13 +365,13 @@ fn update_installable() -> bool {
 /// Help > About commit.kiwi & Licenses…: open the bundled THIRD-PARTY-LICENSES.md (only that file) with the OS
 /// opener; `tauri dev` builds without the bundle fall back to the repository's copy.
 #[tauri::command]
-fn open_licenses(app: AppHandle) -> Result<(), String> {
+async fn open_licenses(app: AppHandle) -> Result<(), String> {
     const NAME: &str = "THIRD-PARTY-LICENSES.md";
     let bundled = app.path().resource_dir().ok().map(|d| d.join(NAME)).filter(|p| p.is_file());
     let dev = || cfg!(debug_assertions).then(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").join(NAME)).filter(|p| p.is_file());
     let path = bundled.or_else(dev).ok_or_else(|| format!("{NAME} is missing from this build"))?;
     let opener = if cfg!(target_os = "macos") { "open -t {path}" } else { "xdg-open {path}" };
-    open_editor(opener.into(), path.to_string_lossy().into_owned(), String::new())
+    open_editor(opener.into(), path.to_string_lossy().into_owned(), String::new()).await
 }
 
 /// tauri.conf.json `identifier`: the config folder's name, needed before Tauri starts (the launcher's socket lives there).
@@ -725,7 +762,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![llm::llm_models, llm::llm_download, llm::llm_cancel, llm::llm_stop, llm::llm_delete, llm::llm_generate, llm::llm_search_query, rpc, request_trace, request_timings, watch_repo, unwatch_repo, reinstall_agent, cleanup_agents, ssh_hosts, load_prefs, save_prefs, open_editor, read_config, ensure_config, write_config, list_themes, sublime_user_dir, import_sublime, agent_info, set_menu, askpass_answer, cli_take, install_cli, uninstall_cli, open_licenses, update_installable])
+        .invoke_handler(tauri::generate_handler![llm::llm_models, llm::llm_download, llm::llm_cancel, llm::llm_stop, llm::llm_delete, llm::llm_generate, llm::llm_search_query, rpc, request_trace, request_timings, watch_repo, unwatch_repo, reinstall_agent, cleanup_agents, ssh_hosts, load_prefs, save_prefs, open_editor, save_text_as, read_config, ensure_config, write_config, list_themes, sublime_user_dir, import_sublime, agent_info, set_menu, askpass_answer, cli_take, install_cli, uninstall_cli, open_licenses, update_installable])
         .run(tauri::generate_context!())
         .expect("error while running commit.kiwi");
 }
@@ -773,6 +810,9 @@ mod tests {
         assert_eq!(split_args("  a   'b c'  ").unwrap(), ["a", "b c"]);
         assert_eq!(split_args("x ''").unwrap(), ["x", ""]); // an explicitly empty argument is kept
         assert!(split_args("   ").is_err() && split_args("a 'b").is_err());
+        // a path pasted from a shell keeps its escaped spaces; inside quotes a backslash is literal
+        assert_eq!(split_args(r"/Applications/Sublime\ Text.app/x/subl {path}").unwrap(), ["/Applications/Sublime Text.app/x/subl", "{path}"]);
+        assert_eq!(split_args(r"a 'b\c'").unwrap(), ["a", r"b\c"]);
     }
 
     #[test]
@@ -833,15 +873,20 @@ mod tests {
         assert_eq!(std::fs::read_to_string(gitmerge.join("preferences.json")).unwrap(), "g");
     }
 
-    #[test]
-    fn editor_runs_without_a_shell() {
+    #[tokio::test]
+    async fn editor_runs_without_a_shell() {
         let d = tempfile::tempdir().unwrap();
         let marker = d.path().join("evil; touch pwned");
         std::fs::write(&marker, "x").unwrap();
         // a hostile file name stays one argument; `test -f` finds it, nothing is interpreted
-        assert!(open_editor("test -f {path}".into(), marker.to_str().unwrap().into(), String::new()).is_ok());
+        assert!(open_editor("test -f {path}".into(), marker.to_str().unwrap().into(), String::new()).await.is_ok());
         assert!(!d.path().join("pwned").exists());
-        assert!(open_editor("definitely-not-a-program {path}".into(), "x".into(), String::new()).is_err());
+        assert!(open_editor("definitely-not-a-program {path}".into(), "x".into(), String::new()).await.is_err());
+        // a launcher that exits non-zero is an error carrying its stderr, not a silent success
+        let err = open_editor("ls {path}".into(), d.path().join("missing").to_str().unwrap().into(), String::new()).await.unwrap_err();
+        assert!(err.contains("missing"), "{err}");
+        // still running after the grace period: the editor itself, left alone
+        assert!(open_editor("sleep 3".into(), String::new(), String::new()).await.is_ok());
     }
 
     #[test]

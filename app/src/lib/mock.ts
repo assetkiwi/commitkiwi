@@ -480,6 +480,7 @@ export async function mockRpc(location: string, req: Req): Promise<any> {
   if ("SetRemoteUrl" in req) { w.__mockCalls.push(req); return "Done"; }
   // ---- F8
   if ("StashOp" in req || "ClearStashes" in req) { w.__mockCalls.push(req); return "Done"; }
+  if ("Patch" in req) return { Text: req.Patch.oids.map((o) => `From ${o} Mon Sep 17 00:00:00 2001\nSubject: [PATCH] mock\n\n`).join("") };
   if ("RemoteUrl" in req) {
     if (!remotes.includes(req.RemoteUrl.name)) throw `no remote named "${req.RemoteUrl.name}"`;
     return { Text: wf.__mockRemoteUrls[req.RemoteUrl.name] ?? `git@example.com:demo/${req.RemoteUrl.name}.git` };

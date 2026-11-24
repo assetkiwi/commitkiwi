@@ -751,6 +751,9 @@
       : op(`git cherry-pick ${short(c)}`, { CherryPick: { repo, rev: c } })));
     if (work?.files.some((f) => f.kind === "conflicted")) showWork();
   }
+  /** copy_patch / save_patch: `commits` (a multi-selection) or one `commit` */
+  const patchCommits = (a: Record<string, unknown>) =>
+    Array.isArray(a.commits) ? a.commits.filter((c): c is string => typeof c === "string") : [need(a.commit, "commit")];
   const refsAt = (oid: string) => tab.refs.refs.filter((r) => r.oid === oid).map((r) => fullRef(r.kind, r.name));
   /** Revert File / Cherry Pick File: the commit's patch of that file, reversed or forward, into the working directory */
   async function filePatch(a: Record<string, unknown>, mode: "discard" | "worktree") {
@@ -894,6 +897,13 @@
       registerCommand("unlock_worktree", { run: (a) => worktreeOp("unlock", need(a.worktree_path, "worktree")) }),
       registerCommand("prune_worktrees", { caption: "Prune Worktrees", run: () => worktreeOp("prune", "") }),
       registerCommand("copy_remote_url", { run: async (a) => { await copyLater(api.remoteUrl(tab.location, repo, need(a.remote, "remote"))); } }),
+      registerCommand("copy_patch", { run: async (a) => { await copyLater(api.patch(tab.location, repo, patchCommits(a))); } }),
+      registerCommand("save_patch", { run: async (a) => {
+        const oids = patchCommits(a);
+        try {
+          await api.saveTextAs(`${short(oids[0])}${oids.length > 1 ? `-${oids.length}-commits` : ""}.patch`, await api.patch(tab.location, repo, oids));
+        } catch (e) { app.notice = String(e); }
+      } }),
       registerCommand("revert_commits", { run: (a) => eachCommit("revert", a) }),
       registerCommand("cherry_pick_commits", { run: (a) => eachCommit("cherry-pick", a) }),
       registerCommand("hide_all_commit_refs", { run: (a) => setHidden(tab, [...new Set([...tab.hidden, ...refsAt(need(a.commit, "commit"))])]) }),

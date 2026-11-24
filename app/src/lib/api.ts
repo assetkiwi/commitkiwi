@@ -118,6 +118,14 @@ export const api = {
   /** an unmerged file's stages and working-tree file (the merge tool) */
   conflict: async (loc: string, repo: string, path: string): Promise<ConflictFile> => (await rpc(loc, { Conflict: { repo, path } })).Conflict,
   remoteUrl: async (loc: string, repo: string, name: string): Promise<string> => (await rpc(loc, { RemoteUrl: { repo, name } })).Text,
+  /** The commits as one `git format-patch` mailbox, oldest first. */
+  patch: async (loc: string, repo: string, oids: string[]): Promise<string> => (await rpc(loc, { Patch: { repo, oids } })).Text,
+  /** Ask where to save `text` (the native save dialog, `name` suggested) and write it there; false when cancelled. */
+  saveTextAs: async (name: string, text: string): Promise<boolean> => {
+    if (inTauri) return invoke<boolean>("save_text_as", { name, text });
+    (globalThis as unknown as { __mockSaved?: unknown[] }).__mockSaved?.push({ name, text });
+    return true;
+  },
   /** The Create Pull/Merge Request dialog's facts; with `forge` + `host` also the CLI and whether it is logged in. */
   forgeProbe: async (loc: string, repo: string, remote: string, source: string | null, target: string | null, forge: "github" | "gitlab" | null, host: string | null, cli_path: string | null): Promise<ForgeInfo> =>
     (await rpc(loc, { ForgeProbe: { repo, remote, source, target, forge, host, cli_path } })).Forge,

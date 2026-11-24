@@ -184,6 +184,8 @@ pub enum Req {
     ClearStashes { repo: String },
     /// A remote's fetch URL (`Text`), a read.
     RemoteUrl { repo: String, name: String },
+    /// The commits as one `git format-patch` mailbox (oldest first, appliable with `git am`); merges have none.
+    Patch { repo: String, oids: Vec<String> },
     // ---- M6 (merge tool, commit editing)
     /// An unmerged file for the merge tool: its index stages and the working-tree file (`Resp::Conflict`), a read.
     Conflict { repo: String, path: String },
@@ -505,7 +507,7 @@ pub enum Resp {
     Identity(String),
     Scan(Scan),
     Search(SearchResult),
-    /// A plain string reply (`RemoteUrl`).
+    /// A plain string reply (`RemoteUrl`, `Patch`).
     Text(String),
     Conflict(ConflictFile),
     /// A write finished.

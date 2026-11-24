@@ -99,6 +99,7 @@ export type Req =
   | { StashOp: { repo: string; stash: string; oid: string; action: "apply" | "pop" | "drop" } }
   | { ClearStashes: { repo: string } }
   | { RemoteUrl: { repo: string; name: string } }
+  | { Patch: { repo: string; oids: string[] } }
   // M6: an unmerged file's stages (a read), the merge tool's save, commit editing by scripted rebase
   | { Conflict: { repo: string; path: string } }
   | { SaveMerge: { repo: string; path: string; text: string; stage: boolean } }
