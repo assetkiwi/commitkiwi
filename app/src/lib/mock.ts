@@ -104,6 +104,9 @@ function bigDiff(p: string): string {
 }
 const BIG_FILES = Array.from({ length: BIG_N === true ? 300 : Number(BIG_N) }, (_, i) => `big/f${i}.php`);
 if (BIG) work = BIG_FILES.map((path) => ({ path, old_path: null, index: ".", worktree: "M", kind: "changed" }));
+// `__mockUntracked = N`: N untracked files (a copied vendor folder) on top of the working copy
+const UNTRACKED_N = Number((globalThis as unknown as { __mockUntracked?: number }).__mockUntracked ?? 0);
+if (UNTRACKED_N) work = [...work, ...Array.from({ length: UNTRACKED_N }, (_, i) => ({ path: `vendor-bak/pkg${i % 50}/f${i}.php`, old_path: null, index: ".", worktree: "?", kind: "untracked" as const }))];
 const twoHunks = (p: string) => `diff --git a/${p} b/${p}\nindex 111..222 100644\n--- a/${p}\n+++ b/${p}\n@@ -2,5 +2,5 @@ one\n a\n-old one\n+new one\n b\n c\n d\n@@ -20,4 +20,5 @@ two\n x\n+added line\n y\n z\n-gone\n+kept\n`;
 
 // Console jobs. Tests make a kind of write slow (`__mockSlow.Fetch = 2000`, cancellable meanwhile) or fail

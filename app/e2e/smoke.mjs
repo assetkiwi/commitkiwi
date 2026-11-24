@@ -269,7 +269,7 @@ await page.locator(".workrow .s", { hasText: "1 staged file, 4 unstaged files" }
 assert.equal(await page.locator(".workrow .m").innerText(), "Commit Changes");
 assert.equal(await page.locator("#row-0.sel").count(), 0, "commit list shows no selection while working copy is open");
 // every changed file stacked: unstaged ones expanded with their diff, staged ones collapsed below
-assert.deepEqual(await wd.locator(".wsec .fh").allInnerTexts(), ["Working Directory", "Staged Files"]);
+assert.deepEqual(await wd.locator(".wsec .fh").allInnerTexts(), ["Working Directory", "Untracked Files\n2", "Staged Files"]);
 assert.equal(await wd.locator(".file").count(), 5);
 await unstagedFile("composer.json").locator(".wdiff .diff").waitFor();
 assert.equal(await stagedFile("README.md").locator(".diff").count(), 0);
@@ -333,6 +333,8 @@ assert.deepEqual(await cjw.locator(".sp:not(.cband)").last().locator(".n").evalu
 await cjw.getByRole("button", { name: "Show entire file" }).first().click();
 await page.waitForFunction(() => ![...document.querySelectorAll(".sp .half")].some((h) => h.textContent.includes("/* line 10 */")));
 // --- whole-file highlighting (Lezer) on the untracked PHP file
+assert.equal(await unstagedFile("new_feature.php").locator(".diff").count(), 0, "untracked files start closed (Sublime Merge)");
+await unstagedFile("new_feature.php").getByRole("button", { expanded: false }).click();
 await unstagedFile("new_feature.php").locator(".tok-keyword").first().waitFor();
 if (shots) await wd.screenshot({ path: `${shots}/f5-workdir-split.png` });
 

@@ -14,6 +14,7 @@
   import DiffToolbar from "./DiffToolbar.svelte";
   import WorkDiff from "./WorkDiff.svelte";
 
+  const LIST = "untracked"; // the focus value of the Untracked Files list tab
   const AUTO_FILES = 20; // more changed files than this start collapsed (each open file loads its diff)
   const PAGE = 500; // file cards (and tabs) rendered per section, more on demand: 20,000 of them freeze the view
   let { tab, status, rev = 0, onchanged, focus = $bindable(null) }: {
@@ -24,18 +25,24 @@
     focus?: string | null;
   } = $props();
 
-  let confirming = $state<string | null>(null); // a file key, or "u:*" for Discard All
+  let confirming = $state<string | null>(null); // a file key, or "*modified" for Discard All
   let error = $state("");
   let diffVersion = $state(0);
   const flipped = new SvelteSet<string>(); // keys whose expanded state differs from the default
   const closed = new SvelteSet<string>(); // closed file tabs
-  let limit = $state(PAGE);
+  const limit = $state({ m: PAGE, u: PAGE, s: PAGE }); // cards shown per section: modified, untracked, staged
+  // like Sublime Merge: a few untracked files sit open below the Working Directory (each closed until its chevron is
+  // clicked); more than AUTO_FILES never show in one view, "Show Files" opens a list tab instead (rows, no diffs)
+  let hideUntracked = $state(false);
+  let listOpen = $state(false);
 
   const files = $derived(status?.files ?? []);
   const conflicts = $derived(files.filter((f) => f.kind === "conflicted"));
-  const unstaged = $derived(files.filter((f) => f.kind === "untracked" || (f.kind === "changed" && f.worktree !== ".")));
+  const modified = $derived(files.filter((f) => f.kind === "changed" && f.worktree !== "."));
+  const untracked = $derived(files.filter((f) => f.kind === "untracked"));
+  const unstaged = $derived([...modified, ...untracked]);
   const staged = $derived(files.filter((f) => f.kind === "changed" && f.index !== "."));
-  const top = $derived([...conflicts, ...unstaged]); // the "Working Directory" section
+  const top = $derived([...conflicts, ...modified]); // the "Working Directory" section; untracked files have their own
   const keyOf = (f: WorkFile, isStaged: boolean) => `${isStaged ? "s" : "u"}:${f.path}`;
   const letter = (f: WorkFile, isStaged: boolean) =>
     f.kind === "conflicted" ? "!" : f.kind === "untracked" ? "?" : isStaged ? "S" : f.worktree;
@@ -48,7 +55,12 @@
   });
   $effect(() => { if (focus) closed.delete(focus); });
 
-  const isOpen = (key: string, isStaged: boolean) => (!isStaged && top.length <= AUTO_FILES) !== flipped.has(key);
+  const untrackedPaths = $derived(new Set(untracked.map((f) => f.path)));
+  const fewUntracked = $derived(untracked.length <= AUTO_FILES);
+  const isOpen = (key: string, isStaged: boolean) => {
+    const auto = !isStaged && !untrackedPaths.has(key.slice(2)) && top.length <= AUTO_FILES;
+    return auto !== flipped.has(key);
+  };
   const toggle = (key: string) => (flipped.has(key) ? flipped.delete(key) : flipped.add(key));
   /** a section's chevron: collapse all its files if any is open, else expand all */
   function toggleSection(list: WorkFile[], isStaged: boolean) {
@@ -58,18 +70,23 @@
   const anyOpen = (list: WorkFile[], isStaged: boolean) => list.some((f) => isOpen(keyOf(f, isStaged), isStaged));
 
   const focused = $derived.by(() => {
-    if (!focus) return null;
+    if (!focus || focus === LIST) return null;
     const isStaged = focus.startsWith("s:");
-    const f = (isStaged ? staged : top).find((x) => keyOf(x, isStaged) === focus);
+    const f = (isStaged ? staged : [...top, ...untracked]).find((x) => keyOf(x, isStaged) === focus);
     return f ? { f, isStaged } : null;
   });
   const fileTabs = $derived.by(() => {
-    const list = [...conflicts.map((f) => ({ f, s: false })), ...unstaged.slice(0, limit).map((f) => ({ f, s: false })), ...staged.slice(0, limit).map((f) => ({ f, s: true }))];
-    // the open file keeps its tab even beyond the rendered page (picked in the Files column)
+    const list = [
+      ...conflicts.map((f) => ({ f, s: false })), ...modified.slice(0, limit.m).map((f) => ({ f, s: false })),
+      ...(fewUntracked ? untracked : []).map((f) => ({ f, s: false })), ...staged.slice(0, limit.s).map((f) => ({ f, s: true })),
+    ];
+    // the open file keeps its tab even beyond the rendered page (picked in the Files column or the untracked list)
     if (focused && !list.some(({ f, s }) => keyOf(f, s) === focus)) list.push({ f: focused.f, s: focused.isStaged });
-    return list.filter(({ f, s }) => !closed.has(keyOf(f, s))).map(({ f, s }) => ({ key: keyOf(f, s), label: base(f.path), title: f.path, badge: letter(f, s) }));
+    const out = list.filter(({ f, s }) => !closed.has(keyOf(f, s))).map(({ f, s }) => ({ key: keyOf(f, s), label: base(f.path), title: f.path, badge: letter(f, s) }));
+    return listOpen && untracked.length ? [{ key: LIST, label: `Untracked Files (${untracked.length.toLocaleString()})`, title: "Untracked Files", badge: "?" }, ...out] : out;
   });
-  function closeTab(key: string) { closed.add(key); if (focus === key) focus = null; }
+  function closeTab(key: string) { if (key === LIST) listOpen = false; else closed.add(key); if (focus === key) focus = null; }
+  const showList = () => { listOpen = true; focus = LIST; };
 
   async function act(cmd: string, req: Req) {
     error = "";
@@ -102,8 +119,26 @@
   const base = (p: string) => p.slice(dir(p).length);
 </script>
 
-{#snippet more(n: number)}
-  {#if n > limit}<p class="hint"><button class="btn sm" onclick={() => (limit += PAGE)}>Show {Math.min(PAGE, n - limit).toLocaleString()} more files</button> {(n - limit).toLocaleString()} not shown</p>{/if}
+{#snippet more(n: number, k: "m" | "u" | "s")}
+  {#if n > limit[k]}<p class="hint"><button class="btn sm" onclick={() => (limit[k] += PAGE)}>Show {Math.min(PAGE, n - limit[k]).toLocaleString()} more files</button> {(n - limit[k]).toLocaleString()} not shown</p>{/if}
+{/snippet}
+
+{#snippet row(f: WorkFile)}
+  {@const key = keyOf(f, false)}
+  <div class="card file">
+    <h3 class="band" oncontextmenu={(e) => fileMenu(e, f, false)}>
+      <button class="fh" onclick={() => (focus = key)}><span class="st st-?" title="untracked">?</span><span class="path"><span class="dir">{dir(f.path)}</span>{base(f.path)}</span></button>
+      <span class="acts">
+        {#if confirming === key}
+          <button class="btn sm danger" onclick={() => discard([f.path])}>Delete file</button>
+          <button class="btn sm" onclick={() => (confirming = null)}>Cancel</button>
+        {:else}
+          <button class="btn sm" aria-label="Delete {f.path}" onclick={() => (app.prefs.confirm_destructive ? (confirming = key) : discard([f.path]))}>Delete</button>
+          <button class="btn sm" aria-label="Stage {f.path}" onclick={() => stage([f.path])}>Stage</button>
+        {/if}
+      </span>
+    </h3>
+  </div>
 {/snippet}
 
 {#snippet block(f: WorkFile, isStaged: boolean, single: boolean)}
@@ -142,11 +177,16 @@
 {/snippet}
 
 <div class="details work">
-  <DetailTabs tabs={fileTabs} active={focused ? focus : null} onpick={(k) => (focus = k)} onclose={closeTab} />
+  <DetailTabs tabs={fileTabs} active={focused || (focus === LIST && listOpen) ? focus : null} onpick={(k) => (focus = k)} onclose={closeTab} />
   <div class="dscroll">
     {#if error}<p class="err" role="alert">{error}</p>{/if}
     {#if status?.truncated}<p class="hint">Only the first {files.length.toLocaleString()} files are listed.</p>{/if}
     {#if !status}<p class="hint">Loading…</p>
+    {:else if focus === LIST && listOpen}
+      <div class="wsec"><span class="fh">Untracked Files <span class="cnt">{untracked.length.toLocaleString()}</span></span>
+        <button class="btn sm" onclick={() => stage(paths(untracked))}>Stage All</button></div>
+      {#each untracked.slice(0, limit.u) as f (f.path)}{@render row(f)}{/each}
+      {@render more(untracked.length, "u")}
     {:else if focused}
       <DiffToolbar />
       {#key focus}{@render block(focused.f, focused.isStaged, true)}{/key}
@@ -156,22 +196,44 @@
       <DiffToolbar />
       {#if top.length}
         <div class="wsec">
-          <button class="fh" aria-expanded={anyOpen(top, false)} onclick={() => { toggleSection(conflicts, false); toggleSection(unstaged, false); }}>
+          <button class="fh" aria-expanded={anyOpen(top, false)} onclick={() => { toggleSection(conflicts, false); toggleSection(modified, false); }}>
             <svg class="i chev" class:open={anyOpen(top, false)}><use href="#i-chevron" /></svg>Working Directory
           </button>
-          {#if unstaged.length}
-            {#if confirming === "u:*"}
-              <button class="btn sm danger" onclick={() => discard(paths(unstaged))}>Really discard all {unstaged.length.toLocaleString()} files</button>
+          {#if modified.length}
+            {#if confirming === "*modified"}
+              <button class="btn sm danger" onclick={() => discard(paths(modified))}>Really discard all {modified.length.toLocaleString()} files</button>
               <button class="btn sm" onclick={() => (confirming = null)}>Cancel</button>
             {:else}
-              <button class="btn sm" onclick={() => (app.prefs.confirm_destructive ? (confirming = "u:*") : discard(paths(unstaged)))}>Discard All</button>
+              <button class="btn sm" onclick={() => (app.prefs.confirm_destructive ? (confirming = "*modified") : discard(paths(modified)))}>Discard All</button>
             {/if}
           {/if}
           <button class="btn sm" onclick={() => stage(paths(top))}>Stage All</button>
         </div>
         {#each conflicts as f (f.path)}{@render block(f, false, false)}{/each}
-        {#each unstaged.slice(0, limit) as f (f.path)}{@render block(f, false, false)}{/each}
-        {@render more(unstaged.length)}
+        {#each modified.slice(0, limit.m) as f (f.path)}{@render block(f, false, false)}{/each}
+        {@render more(modified.length, "m")}
+      {/if}
+      {#if untracked.length}
+        <div class="wsec">
+          {#if fewUntracked}
+            <button class="fh" aria-expanded={!hideUntracked} onclick={() => (hideUntracked = !hideUntracked)}>
+              <svg class="i chev" class:open={!hideUntracked}><use href="#i-chevron" /></svg>Untracked Files <span class="cnt">{untracked.length}</span>
+            </button>
+          {:else}
+            <span class="fh">Untracked Files <span class="cnt">{untracked.length.toLocaleString()}</span></span>
+          {/if}
+          {#if confirming === "*untracked"}
+            <button class="btn sm danger" onclick={() => discard(paths(untracked))}>Really delete all {untracked.length.toLocaleString()} files</button>
+            <button class="btn sm" onclick={() => (confirming = null)}>Cancel</button>
+          {:else}
+            <button class="btn sm" onclick={() => (app.prefs.confirm_destructive ? (confirming = "*untracked") : discard(paths(untracked)))}>Delete All</button>
+          {/if}
+          <button class="btn sm" onclick={() => stage(paths(untracked))}>Stage All</button>
+          {#if !fewUntracked}<button class="btn sm" onclick={showList}>Show Files</button>{/if}
+        </div>
+        {#if fewUntracked && !hideUntracked}
+          {#each untracked as f (f.path)}{@render block(f, false, false)}{/each}
+        {/if}
       {/if}
       {#if staged.length}
         <div class="wsec">
@@ -180,8 +242,8 @@
           </button>
           <button class="btn sm" onclick={() => unstage(paths(staged))}>Unstage All</button>
         </div>
-        {#each staged.slice(0, limit) as f (f.path)}{@render block(f, true, false)}{/each}
-        {@render more(staged.length)}
+        {#each staged.slice(0, limit.s) as f (f.path)}{@render block(f, true, false)}{/each}
+        {@render more(staged.length, "s")}
       {/if}
     {/if}
   </div>

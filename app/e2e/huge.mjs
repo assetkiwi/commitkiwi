@@ -34,6 +34,29 @@ await view.locator(".filespane .fr").nth(999).click();
 assert.match(await wd.locator(".dtabs .dt.on").innerText(), /f999\.php/);
 assert.equal(await wd.locator(".file > h3").count(), 1, "the one file");
 
+
+// ---- a copied vendor folder: untracked files never open in one view, they get a list tab (Sublime Merge)
+const page2 = await (await browser.newContext({ viewport: { width: 1400, height: 850 } })).newPage();
+page2.on("pageerror", (e) => errors.push(String(e)));
+await page2.addInitScript(() => { globalThis.__mockUntracked = 21_000; globalThis.__mockWatchEvents = true; });
+await page2.goto("http://127.0.0.1:1420");
+await page2.getByPlaceholder("~/projects/my-repo").fill("/work/demo-repo");
+await page2.getByRole("button", { name: "Open Repository", exact: true }).click();
+const v2 = page2.locator(".tabview:not(.off)");
+await v2.locator(".workrow").click();
+const w2 = v2.locator(".details.work");
+await w2.locator(".wsec", { hasText: "Untracked Files" }).waitFor();
+assert.ok(await w2.locator(".file > h3").count() < 10, "no untracked cards in the summary");
+assert.equal(await w2.locator(".wsec", { hasText: "Untracked Files" }).locator(".chev").count(), 0, "no inline expand");
+await w2.getByRole("button", { name: "Show Files" }).click();
+await w2.locator(".dtabs .dt.on", { hasText: "Untracked Files (21,002)" }).waitFor();
+assert.equal(await w2.locator(".file > h3").count(), 500, "one page of rows");
+assert.equal(await w2.locator(".file .diff").count(), 0, "rows carry no diffs");
+await w2.locator(".file .fh").first().click();
+await w2.locator(".dtabs .dt.on", { hasText: ".php" }).waitFor();
+await w2.getByRole("button", { name: "Close Untracked Files" }).click();
+assert.equal(await w2.locator(".dtabs .dt", { hasText: "Untracked Files (" }).count(), 0, "list tab closes");
+
 assert.deepEqual(errors, [], "no console/page errors");
 console.log(`huge e2e ok (${ms} ms)`);
 await browser.close();

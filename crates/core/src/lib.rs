@@ -1623,8 +1623,8 @@ fn unstage(repo: &str, paths: &[String]) -> Result<(), String> {
 /// status, so a stale UI cannot delete a file it believes is tracked.
 fn discard(repo: &str, paths: &[String]) -> Result<(), String> {
     let st = status(repo)?;
-    let untracked = |p: &String| st.files.iter().any(|f| f.kind == WorkKind::Untracked && &f.path == p);
-    let (gone, tracked): (Vec<String>, Vec<String>) = paths.iter().cloned().partition(untracked);
+    let new: std::collections::HashSet<&str> = st.files.iter().filter(|f| f.kind == WorkKind::Untracked).map(|f| f.path.as_str()).collect();
+    let (gone, tracked): (Vec<String>, Vec<String>) = paths.iter().cloned().partition(|p| new.contains(p.as_str()));
     git_paths(repo, &["--literal-pathspecs", "restore", "--worktree"], &tracked)?;
     git_paths(repo, &["--literal-pathspecs", "clean", "-f", "-d", "-q"], &gone)
 }
