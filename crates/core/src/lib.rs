@@ -662,14 +662,15 @@ fn patch(repo: &str, oids: &[String]) -> Result<String, String> {
     let mut args = vec!["rev-list", "--no-walk=sorted"];
     args.extend(oids.iter().map(String::as_str));
     let sorted = git(repo, &args)?;
-    let mut out = String::new();
+    // raw bytes against the cap, converted once at the end (lossy UTF-8 can grow, raw bytes cannot)
+    let mut out = Vec::new();
     for oid in sorted.lines().rev() {
-        let (bytes, cut) = git_capped(repo, &["format-patch", "--stdout", "-1", oid], MAX_BYTES - out.len(), false)?;
+        let (bytes, cut) = git_capped(repo, &["format-patch", "--stdout", "-1", oid], MAX_BYTES.saturating_sub(out.len()), false)?;
         if cut { return Err(format!("the patch is larger than {} MB", MAX_BYTES >> 20)); }
-        out += &String::from_utf8_lossy(&bytes);
+        out.extend(bytes);
     }
     if out.is_empty() { return Err("merge commits have no patch".into()); }
-    Ok(out)
+    Ok(String::from_utf8_lossy(&out).into_owned())
 }
 
 fn open(path: &str) -> Result<RepoInfo, String> {
