@@ -654,7 +654,7 @@ fn check_oid(o: &str) -> Result<(), String> {
 
 fn patch(repo: &str, oids: &[String]) -> Result<String, String> {
     const MAX_COMMITS: usize = 500;
-    const MAX_BYTES: usize = 64 << 20;
+    const MAX_BYTES: usize = 32 << 20; // under the agent link's 64 MiB frame once JSON-encoded
     oids.iter().try_for_each(|o| check_oid(o))?;
     if oids.is_empty() { return Err("no commits".into()); }
     if oids.len() > MAX_COMMITS { return Err(format!("select at most {MAX_COMMITS} commits")); }
