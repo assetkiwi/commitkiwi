@@ -93,7 +93,8 @@ const stageText = (side: "base" | "ours" | "theirs") => Array.from({ length: 30 
 // Perf harness: `__mockBig = true` (addInitScript) replaces the working copy with 300 modified files of 20-400
 // lines (big/f50.php, f150, f250: 5000 lines) and gives every commit the same 300 files. One hunk per file, every
 // 10th line changed, so the whole-file contents (ReadFile) match the diff.
-const BIG = (globalThis as unknown as { __mockBig?: boolean }).__mockBig === true;
+const BIG_N = (globalThis as unknown as { __mockBig?: boolean | number }).__mockBig; // true = 300 files, or how many
+const BIG = !!BIG_N;
 const bigLines = (p: string) => { const i = Number(p.match(/f(\d+)\./)?.[1] ?? 0); return i % 100 === 50 ? 5000 : 20 + ((i * 37) % 381); };
 const bigText = (p: string, neu: boolean) => Array.from({ length: bigLines(p) }, (_, k) => (neu && k % 10 === 5 ? `$x${k} = "changed ${k}";` : `$x${k} = ${k}; // ${p}`)).join("\n") + "\n";
 function bigDiff(p: string): string {
@@ -101,7 +102,7 @@ function bigDiff(p: string): string {
   const body = Array.from({ length: n }, (_, k) => (k % 10 === 5 ? `-$x${k} = ${k}; // ${p}\n+$x${k} = "changed ${k}";` : ` $x${k} = ${k}; // ${p}`)).join("\n");
   return `diff --git a/${p} b/${p}\nindex 111..222 100644\n--- a/${p}\n+++ b/${p}\n@@ -1,${n} +1,${n} @@\n${body}\n`;
 }
-const BIG_FILES = Array.from({ length: 300 }, (_, i) => `big/f${i}.php`);
+const BIG_FILES = Array.from({ length: BIG_N === true ? 300 : Number(BIG_N) }, (_, i) => `big/f${i}.php`);
 if (BIG) work = BIG_FILES.map((path) => ({ path, old_path: null, index: ".", worktree: "M", kind: "changed" }));
 const twoHunks = (p: string) => `diff --git a/${p} b/${p}\nindex 111..222 100644\n--- a/${p}\n+++ b/${p}\n@@ -2,5 +2,5 @@ one\n a\n-old one\n+new one\n b\n c\n d\n@@ -20,4 +20,5 @@ two\n x\n+added line\n y\n z\n-gone\n+kept\n`;
 

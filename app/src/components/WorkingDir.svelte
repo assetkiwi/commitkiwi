@@ -15,6 +15,7 @@
   import WorkDiff from "./WorkDiff.svelte";
 
   const AUTO_FILES = 20; // more changed files than this start collapsed (each open file loads its diff)
+  const PAGE = 500; // file cards (and tabs) rendered per section, more on demand: 20,000 of them freeze the view
   let { tab, status, rev = 0, onchanged, focus = $bindable(null) }: {
     tab: Tab; status: Status | null; onchanged: () => Promise<void>;
     /** bumped when file contents may have changed under an unchanged status: open diffs reload */
@@ -28,6 +29,7 @@
   let diffVersion = $state(0);
   const flipped = new SvelteSet<string>(); // keys whose expanded state differs from the default
   const closed = new SvelteSet<string>(); // closed file tabs
+  let limit = $state(PAGE);
 
   const files = $derived(status?.files ?? []);
   const conflicts = $derived(files.filter((f) => f.kind === "conflicted"));
@@ -55,14 +57,17 @@
   }
   const anyOpen = (list: WorkFile[], isStaged: boolean) => list.some((f) => isOpen(keyOf(f, isStaged), isStaged));
 
-  const fileTabs = $derived([
-    ...top.map((f) => ({ f, s: false })), ...staged.map((f) => ({ f, s: true })),
-  ].filter(({ f, s }) => !closed.has(keyOf(f, s))).map(({ f, s }) => ({ key: keyOf(f, s), label: base(f.path), title: f.path, badge: letter(f, s) })));
   const focused = $derived.by(() => {
     if (!focus) return null;
     const isStaged = focus.startsWith("s:");
     const f = (isStaged ? staged : top).find((x) => keyOf(x, isStaged) === focus);
     return f ? { f, isStaged } : null;
+  });
+  const fileTabs = $derived.by(() => {
+    const list = [...conflicts.map((f) => ({ f, s: false })), ...unstaged.slice(0, limit).map((f) => ({ f, s: false })), ...staged.slice(0, limit).map((f) => ({ f, s: true }))];
+    // the open file keeps its tab even beyond the rendered page (picked in the Files column)
+    if (focused && !list.some(({ f, s }) => keyOf(f, s) === focus)) list.push({ f: focused.f, s: focused.isStaged });
+    return list.filter(({ f, s }) => !closed.has(keyOf(f, s))).map(({ f, s }) => ({ key: keyOf(f, s), label: base(f.path), title: f.path, badge: letter(f, s) }));
   });
   function closeTab(key: string) { closed.add(key); if (focus === key) focus = null; }
 
@@ -96,6 +101,10 @@
   const dir = (p: string) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/") + 1) : "");
   const base = (p: string) => p.slice(dir(p).length);
 </script>
+
+{#snippet more(n: number)}
+  {#if n > limit}<p class="hint"><button class="btn sm" onclick={() => (limit += PAGE)}>Show {Math.min(PAGE, n - limit).toLocaleString()} more files</button> {(n - limit).toLocaleString()} not shown</p>{/if}
+{/snippet}
 
 {#snippet block(f: WorkFile, isStaged: boolean, single: boolean)}
   {@const key = keyOf(f, isStaged)}
@@ -152,7 +161,7 @@
           </button>
           {#if unstaged.length}
             {#if confirming === "u:*"}
-              <button class="btn sm danger" onclick={() => discard(paths(unstaged))}>Really discard all</button>
+              <button class="btn sm danger" onclick={() => discard(paths(unstaged))}>Really discard all {unstaged.length.toLocaleString()} files</button>
               <button class="btn sm" onclick={() => (confirming = null)}>Cancel</button>
             {:else}
               <button class="btn sm" onclick={() => (app.prefs.confirm_destructive ? (confirming = "u:*") : discard(paths(unstaged)))}>Discard All</button>
@@ -161,7 +170,8 @@
           <button class="btn sm" onclick={() => stage(paths(top))}>Stage All</button>
         </div>
         {#each conflicts as f (f.path)}{@render block(f, false, false)}{/each}
-        {#each unstaged as f (f.path)}{@render block(f, false, false)}{/each}
+        {#each unstaged.slice(0, limit) as f (f.path)}{@render block(f, false, false)}{/each}
+        {@render more(unstaged.length)}
       {/if}
       {#if staged.length}
         <div class="wsec">
@@ -170,7 +180,8 @@
           </button>
           <button class="btn sm" onclick={() => unstage(paths(staged))}>Unstage All</button>
         </div>
-        {#each staged as f (f.path)}{@render block(f, true, false)}{/each}
+        {#each staged.slice(0, limit) as f (f.path)}{@render block(f, true, false)}{/each}
+        {@render more(staged.length)}
       {/if}
     {/if}
   </div>
