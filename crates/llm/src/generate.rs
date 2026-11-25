@@ -14,6 +14,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Longest answer in tokens: a subject of 72 characters plus a body of up to six bullets stays well under this.
 const MAX_NEW: usize = 280;
+/// A shortened first line: well under 100 tokens.
+const SHORTEN_MAX_NEW: usize = 80;
 const MAX_PROMPT: usize = 7_000;
 const CHUNK: usize = 512;
 
@@ -52,7 +54,36 @@ impl Engine {
     pub fn run(&self, prompt: &Prompt, cancel: &AtomicBool) -> Result<String, String> {
         // a low temperature: the same diff gives (nearly) the same message, and the grammar keeps it in shape
         let raw = self.answer(&prompt.messages, &prompt.grammar, MAX_NEW, 0.2, cancel)?;
-        prompt::clean(&raw).ok_or_else(|| "the model returned nothing usable".to_string())
+        let msg = prompt::clean(&raw).ok_or_else(|| "the model returned nothing usable".to_string())?;
+        // a first line that ran long is not cut: the model is asked to shorten it
+        let Some(head) = prompt::overlong(&msg, prompt.style) else { return Ok(msg) };
+        let short = self.shorten(head, prompt.style, cancel)?;
+        Ok(match msg.split_once('\n') {
+            Some((_, rest)) => format!("{short}\n{rest}"),
+            None => short,
+        })
+    }
+
+    /// `line` (a first line longer than `prompt::target`) rewritten shorter by the model: two tries, each on the latest
+    /// line, then the clause trim for whatever is still too long.
+    pub fn shorten(&self, line: &str, style: prompt::Style, cancel: &AtomicBool) -> Result<String, String> {
+        let mut line = line.to_string();
+        // the second try asks for less, since the first came back barely shorter
+        for limit in [prompt::target(style), prompt::target(style) * 3 / 4] {
+            let p = prompt::shorten_prompt(&line, style, limit);
+            // a failed (not cancelled) attempt just means the trim below has to do it
+            let raw = match self.answer(&p.messages, &p.grammar, SHORTEN_MAX_NEW, 0.0, cancel) {
+                Ok(raw) => raw,
+                Err(e) if e == crate::download::CANCELLED => return Err(e),
+                Err(_) => break,
+            };
+            let Some(next) = prompt::accept_shortened(&line, &raw, style) else { break };
+            line = next;
+            if prompt::subject_fits(&line, style) {
+                return Ok(line);
+            }
+        }
+        Ok(prompt::trim_overrun(&line, style, prompt::soft_max(style) + 1))
     }
 
     /// The search query for a natural-language request (`crate::search`): greedy, short, one line.

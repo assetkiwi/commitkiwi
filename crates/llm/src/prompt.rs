@@ -145,6 +145,94 @@ fn file_line(f: &FileChange) -> String {
     }
 }
 
+/// The first line the prompt asks for: the subject after `type(scope): `, or the whole line in the other style.
+pub const fn target(style: Style) -> usize {
+    match style {
+        Style::Conventional => 72,
+        Style::Mimic => 90,
+    }
+}
+/// What the grammar lets a first line run to. Loose on purpose: a model that overshoots finishes its sentence and is
+/// asked to shorten it (`shorten_prompt`), instead of being cut wherever a tight cap happens to fall.
+const CONV_SUBJECT_MAX: usize = 200;
+const MIMIC_LINE_MAX: usize = 210;
+/// What a shortened line may still run over `target` by (a small model counts characters badly).
+const SLACK: usize = 15;
+
+/// The lead of a first line, in chars: everything up to and including its first `: ` or ` - ` when that comes within
+/// 30 characters (`type(scope): `, `[PROJ-6]: `, `chore/ai-models: `, `25464651 - `). 0 when there is none.
+fn lead_len(head: &str) -> usize {
+    [": ", " - "].iter().filter_map(|m| head.find(m).filter(|&i| head[..i].chars().count() <= 30).map(|i| head[..i + m.len()].chars().count())).min().unwrap_or(0)
+}
+
+/// What does not count towards `target`: the Conventional `type(scope): `. The other style counts the whole line.
+fn prefix_len(head: &str, style: Style) -> usize {
+    match style {
+        Style::Conventional => lead_len(head),
+        Style::Mimic => 0,
+    }
+}
+
+fn subject_len(head: &str, style: Style) -> usize {
+    head.chars().count().saturating_sub(prefix_len(head, style))
+}
+
+/// The first line of `text` when it is longer than the prompt asked for.
+pub fn overlong(text: &str, style: Style) -> Option<&str> {
+    let head = text.lines().next()?;
+    (subject_len(head, style) > target(style)).then_some(head)
+}
+
+/// Whether a shortened first line is good enough: within `target` plus `SLACK`.
+pub fn subject_fits(text: &str, style: Style) -> bool {
+    text.lines().next().is_some_and(|h| subject_len(h, style) <= soft_max(style))
+}
+
+/// Back `text`'s first line up to a whole thought that fits when its subject is `max` long or more: cut at the last clause
+/// break (", ", " and ", " or ", " to ", " with ") inside the limit, else at the last space inside it.
+pub fn trim_overrun(text: &str, style: Style, max: usize) -> String {
+    let (head, rest) = text.split_once('\n').unwrap_or((text, ""));
+    if subject_len(head, style) < max {
+        return text.to_string();
+    }
+    let window_end = head.char_indices().nth((prefix_len(head, style) + max).saturating_sub(1)).map_or(head.len(), |(i, _)| i);
+    let window = &head[..window_end];
+    let cut = [", ", " and ", " or ", " to ", " with "].iter().filter_map(|m| window.rfind(m)).max().or_else(|| window.rfind(' ')).unwrap_or(window.len());
+    let head = head[..cut].trim_end_matches([',', ' ']);
+    if rest.is_empty() { head.to_string() } else { format!("{head}\n{rest}") }
+}
+
+/// Ask the model to shorten one first line: it sees the whole line, so it can compress what it could not plan for.
+/// The lead (`type(scope): `, `[PROJ-6]: `) is written into the grammar, so the model cannot change or drop it.
+pub fn shorten_prompt(line: &str, style: Style, limit: usize) -> Prompt {
+    let lead: String = line.chars().take(lead_len(line)).collect();
+    let keep = if lead.is_empty() { "" } else { " The start of the line, up to and including its first `: ` or ` - `, stays exactly as it is." };
+    let counted = if style == Style::Conventional && !lead.is_empty() { " Only the text after that start counts." } else { "" };
+    let system = format!(
+        "You shorten commit message subject lines. Rewrite the line so it is at most {limit} characters, in imperative mood, \
+         with no trailing period.{keep}{counted} Keep the main change and drop secondary details; do not add anything new. \
+         Answer with the shortened line only."
+    );
+    // no tight cap here: a cap hit mid-phrase is what this pass exists to avoid, and the answer must beat the input anyway
+    let rest_max = line.chars().count().saturating_sub(lead.chars().count()).max(8);
+    let lead = lead.replace('\\', "\\\\").replace('"', "\\\"");
+    let grammar = format!("root ::= \"{lead}\" [^\\n]{{8,{rest_max}}}\n");
+    Prompt { messages: vec![("system", system), ("user", line.to_string())], grammar, style }
+}
+
+/// Accept a shortened line only if it is a real shortening that kept the lead.
+pub fn accept_shortened(old: &str, new: &str, style: Style) -> Option<String> {
+    let new = clean(new)?;
+    let new = new.lines().next()?.trim().to_string();
+    let lead: String = old.chars().take(lead_len(old)).collect();
+    (new.chars().count() < old.chars().count() && new.starts_with(&lead) && subject_len(&new, style) >= 8).then_some(new)
+}
+
+/// The most a shortened line may run to before the clause trim takes over.
+pub const fn soft_max(style: Style) -> usize {
+    target(style) + SLACK
+}
+
 /// GBNF for the answer: the first line and an optional bullet list as the body. The prompt asks for ≤ 72 (90) characters;
 /// the cap here is looser, because a model that overshoots must finish its sentence, not be cut mid-phrase.
 pub fn grammar(style: Style) -> String {
@@ -154,10 +242,10 @@ bullet ::= "- " [^\n]{4,100}
     match style {
         Style::Conventional => {
             let types = TYPES.iter().map(|t| format!("\"{t}\"")).collect::<Vec<_>>().join(" | ");
-            format!("root ::= type scope? \"!\"? \": \" subject body?\ntype ::= {types}\nscope ::= \"(\" [a-z0-9_./-]{{1,24}} \")\"\nsubject ::= [^\\n]{{8,110}}\n{body}")
+            format!("root ::= type scope? \"!\"? \": \" subject body?\ntype ::= {types}\nscope ::= \"(\" [a-z0-9_./-]{{1,24}} \")\"\nsubject ::= [^\\n]{{8,{CONV_SUBJECT_MAX}}}\n{body}")
         }
         // another habit: any first line, but still one line of sane length
-        Style::Mimic => format!("root ::= subject body?\nsubject ::= [^\\n-] [^\\n]{{7,119}}\n{body}"),
+        Style::Mimic => format!("root ::= subject body?\nsubject ::= [^\\n-] [^\\n]{{7,{}}}\n{body}", MIMIC_LINE_MAX - 1),
     }
 }
 
@@ -301,6 +389,46 @@ mod tests {
     }
 
     #[test]
+    fn an_overrun_first_line_is_backed_up_to_a_clause() {
+        let line = "chore/ai-models: Update AI models to gpt-5.6-luna and gpt-image-2.5-flare, increase context length to 4000, and update";
+        let cut = &line[..line.len() - 6];
+        assert_eq!(
+            trim_overrun(cut, Style::Mimic, cut.chars().count()),
+            "chore/ai-models: Update AI models to gpt-5.6-luna and gpt-image-2.5-flare, increase context length to 4000"
+        );
+        assert_eq!(trim_overrun("fix: short subject", Style::Conventional, 110), "fix: short subject");
+        // always lands inside the limit: the last break that fits, not the last break there is
+        let t = trim_overrun("feat: add the first thing, add the second thing, add the third thing and the fourth", Style::Conventional, 40);
+        assert_eq!(t, "feat: add the first thing");
+        assert_eq!(trim_overrun("feat: aaaa bbbb cccc dddd eeee ffff", Style::Conventional, 12), "feat: aaaa bbbb");
+    }
+
+    #[test]
+    fn only_a_line_over_the_target_is_shortened() {
+        assert!(overlong("feat(ui): add a thing", Style::Conventional).is_none());
+        let long = format!("feat(ui): {}", "word ".repeat(20));
+        assert!(overlong(&long, Style::Conventional).is_some());
+        assert!(overlong(&"x".repeat(91), Style::Mimic).is_some() && overlong(&"x".repeat(90), Style::Mimic).is_none());
+    }
+
+    #[test]
+    fn a_shortening_must_be_shorter_and_keep_the_lead() {
+        let old = "feat(ui): add the long thing and the other long thing";
+        assert_eq!(accept_shortened(old, "feat(ui): add the long thing", Style::Conventional).as_deref(), Some("feat(ui): add the long thing"));
+        assert!(accept_shortened(old, "fix(ui): add the long thing", Style::Conventional).is_none());
+        assert!(accept_shortened(old, old, Style::Conventional).is_none());
+    }
+
+    #[test]
+    fn the_shortening_grammar_pins_the_lead() {
+        let g = shorten_prompt("[PROJ-6]: Do the first thing and then also do a second thing besides", Style::Mimic, 90).grammar;
+        assert!(g.starts_with("root ::= \"[PROJ-6]: \" "), "{g}");
+        assert!(shorten_prompt("25464651 - Update a thing and another thing and a third thing", Style::Mimic, 90).grammar.starts_with("root ::= \"25464651 - \" "));
+        assert!(shorten_prompt("No lead here but a long enough sentence to shorten", Style::Mimic, 90).grammar.starts_with("root ::= \"\" "));
+        assert!(shorten_prompt("feat(a\"b): quoted scope that is long enough to be shortened somehow", Style::Mimic, 90).grammar.contains("feat(a\\\"b): "));
+    }
+
+    #[test]
     fn clipping_keeps_utf8_and_whole_lines() {
         let t = "é".repeat(400) + "\nsecond line\nthird\n";
         let c = clip(&t, 301); // 301 falls inside a two-byte character
@@ -329,7 +457,7 @@ mod tests {
         assert!(user.contains("### src/Service/UserService.php\n@@ -1 +1 @@") && user.ends_with("Write the commit message."));
         // code before tests in the file list
         assert!(user.find("- src/Service/UserService.php").unwrap() < user.find("- tests/UserServiceTest.php").unwrap());
-        assert!(p.grammar.contains("type ::= \"feat\"") && p.grammar.contains("subject ::= [^\\n]{8,110}"));
+        assert!(p.grammar.contains("type ::= \"feat\"") && p.grammar.contains("subject ::= [^\\n]{8,200}"));
         // a repository with its own habit is mimicked, and the grammar no longer forces a type
         let own = Input { recent: subjects(&["[PROJ-6]: One", "[PROJ-5]: Two", "[PROJ-4]: Three"]), ..Default::default() };
         let m = build(&own);
